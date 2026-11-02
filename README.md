@@ -1,4 +1,4 @@
-# HaloDek — Layanan Pengaduan & Pelaporan Terpadu
+# HaloDek - Layanan Pengaduan & Pelaporan Terpadu Bidang Umum & IT
 
 ## Instalasi baru
 ```
