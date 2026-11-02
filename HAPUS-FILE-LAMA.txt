@@ -1,0 +1,21 @@
+Hapus file lama berikut dari folder halodek (sudah tidak dipakai):
+
+app/Models/AccessLicense.php
+app/Models/Software.php
+app/Models/Concerns/HasExpiry.php
+app/Models/Asset.php
+app/Http/Controllers/Admin/AccessLicenseController.php
+app/Http/Controllers/Admin/SoftwareController.php
+app/Http/Controllers/Admin/AssetController.php
+app/Http/Middleware/EnsureDigitalInventoryAccess.php
+tests/Feature/InventoryTest.php
+tests/Feature/ReportFlowTest.php
+tests/Feature/DashboardTest.php
+tests/Feature/TeamAndAccessTest.php
+resources/views/components/stars.blade.php
+resources/views/admin/assets/index.blade.php
+resources/views/admin/assets/show.blade.php
+resources/views/admin/access-licenses/index.blade.php
+resources/views/admin/software/index.blade.php
+
+Folder kosong yang boleh dihapus: resources/views/admin/assets, resources/views/admin/software, resources/views/admin/access-licenses
