@@ -67,26 +67,32 @@ class DashboardController extends Controller
             'mine' => Report::open()->where('assigned_to_id', $user->id)->count(),
         ];
 
-        $resolved = $scope()->whereNotNull('resolved_at')->where('resolved_at', '>=', now()->subDays(90))->get(['created_at', 'resolved_at']);
-        $stats['avg_hours'] = $resolved->isEmpty() ? null : round($resolved->avg(fn ($r) => $r->created_at->diffInMinutes($r->resolved_at) / 60), 1);
+        // Rata-rata durasi (JAM KERJA) dihitung di database dari kolom yang sudah disimpan saat selesai.
+        $avg = $scope()->whereNotNull('resolve_work_minutes')->where('resolved_at', '>=', now()->subDays(90))->avg('resolve_work_minutes');
+        $stats['avg_hours'] = $avg === null ? null : round((float) $avg / 60, 1);
+
+        // Lewat batas respons: hanya laporan di antrean (jumlahnya kecil), dicek di PHP karena batasnya memakai jam kerja.
+        $overdue = $scope()->with(['team', 'category'])->unassigned()->oldest()->get()->filter->isOverdue()->values();
+        $stats['overdue'] = $overdue->count();
 
         $trend = $this->trend($scope, 14);
         $byCategory = $this->byCategory($scope);
+        $perTeam = $scope()->selectRaw('team_id, status, count(*) as c')->groupBy('team_id', 'status')->get()->groupBy('team_id');
         $byTeam = $teams->map(fn ($t) => [
             'team' => $t,
-            'total' => $scope()->where('team_id', $t->id)->count(),
-            'open' => $scope()->where('team_id', $t->id)->open()->count(),
+            'total' => (int) ($perTeam[$t->id] ?? collect())->sum('c'),
+            'open' => (int) ($perTeam[$t->id] ?? collect())->whereIn('status', Report::OPEN_STATUSES)->sum('c'),
         ]);
 
-        // Antrean: laporan aktif yang belum ada penanggung jawab, yang mendesak & terlama lebih dulu.
-        $queue = $scope()->with(['team', 'category'])->unassigned()
-            ->orderByRaw("CASE priority WHEN 'mendesak' THEN 0 WHEN 'tinggi' THEN 1 WHEN 'sedang' THEN 2 ELSE 3 END")
-            ->oldest()->take(5)->get();
-
-        // Tugas saya (Kepala Regu / Staf): laporan aktif yang dipegang sendiri.
-        $myTasks = Report::with(['team', 'category'])->open()->where('assigned_to_id', $user->id)
-            ->orderByRaw("CASE priority WHEN 'mendesak' THEN 0 WHEN 'tinggi' THEN 1 WHEN 'sedang' THEN 2 ELSE 3 END")
-            ->oldest()->take(5)->get();
+        // Satu daftar "Perlu Ditangani": tugas saya + laporan yang menunggu diambil.
+        // Urutan: lewat batas dulu, lalu prioritas tertinggi, lalu yang paling lama.
+        $rank = ['mendesak' => 0, 'tinggi' => 1, 'sedang' => 2, 'rendah' => 3];
+        $overdueIds = $overdue->pluck('id')->all();
+        $todo = Report::with(['team', 'category'])->open()
+            ->where(fn ($q) => $q->where('assigned_to_id', $user->id)->orWhere(fn ($w) => $w->whereIn('team_id', $teamIds)->whereNull('assigned_to_id')))
+            ->oldest()->take(200)->get()
+            ->sortBy(fn ($r) => [in_array($r->id, $overdueIds, true) ? 0 : 1, $rank[$r->priority] ?? 9, $r->created_at->timestamp])
+            ->take(8)->values();
 
         $recent = $scope()->with(['team', 'category', 'assignee'])->latest()->take(6)->get();
 
@@ -97,7 +103,7 @@ class DashboardController extends Controller
         $announcements = $this->announcementsFor($user);
 
         return view('dashboard.admin', compact(
-            'teams', 'stats', 'trend', 'byCategory', 'byTeam', 'queue', 'myTasks', 'recent',
+            'teams', 'stats', 'overdue', 'todo', 'trend', 'byCategory', 'byTeam', 'recent',
             'workload', 'inventory', 'announcements'
         ));
     }

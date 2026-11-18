@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>429 — Terlalu Banyak Permintaan</title>
+    <title>Terlalu Banyak Permintaan · {{ config('halodek.name') }}</title>
     @include('partials.head-icons')
-    <link rel="stylesheet" href="{{ asset('css/halodek.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/halodek.css') }}?v={{ filemtime(public_path('css/halodek.css')) }}">
 </head>
 <body>
 <div class="err-wrap">

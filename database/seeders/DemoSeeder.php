@@ -98,7 +98,7 @@ class DemoSeeder extends Seeder
         // ---- pengumuman
         $super = User::where('nik', '00001')->first();
         Announcement::firstOrCreate(['title' => 'Selamat datang di HaloDek'], [
-            'body' => "Mulai sekarang seluruh pengaduan IT, sarana prasarana, dan keselamatan kerja disampaikan lewat HaloDek.\nPilih regu yang sesuai, jelaskan masalahnya, dan pantau tindak lanjutnya langsung dari aplikasi.",
+            'body' => "Mulai sekarang seluruh laporan IT, sarana prasarana, dan keselamatan kerja disampaikan lewat HaloDek.\nKetik masalahnya atau pilih regu, jelaskan singkat, lalu pantau penanganannya langsung dari aplikasi.",
             'user_id' => $super->id, 'is_pinned' => true,
         ]);
         Announcement::firstOrCreate(['title' => 'Pemeliharaan jaringan Sabtu malam'], [

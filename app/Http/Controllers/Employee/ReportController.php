@@ -33,7 +33,8 @@ class ReportController extends Controller
         $reports = Report::with(['team', 'category'])
             ->where('user_id', $request->user()->id)
             ->when($status === 'aktif', fn ($q) => $q->open())
-            ->when(! in_array($status, ['semua', 'aktif'], true), fn ($q) => $q->where('status', $status))
+            ->when($status === 'ditutup', fn ($q) => $q->whereIn('status', ['ditolak', 'dibatalkan']))
+            ->when(! in_array($status, ['semua', 'aktif', 'ditutup'], true), fn ($q) => $q->where('status', $status))
             ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('report_number', 'like', "%{$search}%")
@@ -62,7 +63,10 @@ class ReportController extends Controller
 
         // Pemetaan regu => kategori untuk JavaScript wizard.
         $categoryMap = $teams->mapWithKeys(fn ($t) => [
-            $t->id => $t->categories->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'custom' => $c->allow_custom])->values(),
+            $t->id => $t->categories->map(fn ($c) => [
+                'id' => $c->id, 'name' => $c->name, 'custom' => $c->allow_custom,
+                'keywords' => (string) $c->keywords, 'hint' => (string) $c->hint,
+            ])->values(),
         ]);
 
         return view('employee.reports.create', compact('teams', 'selectedTeam', 'locations', 'categoryMap'));
@@ -83,6 +87,44 @@ class ReportController extends Controller
         );
     }
 
+    /**
+     * Laporan AKTIF yang kemungkinan sama (barang yang sama, atau kategori + lokasi yang sama),
+     * agar pelapor cukup memantau laporan yang sudah ada. Hanya peringatan, tidak memblokir.
+     * Laporan orang lain ditampilkan tanpa judul/deskripsi (hanya kategori, lokasi, status).
+     */
+    public function similar(Request $request): JsonResponse
+    {
+        $teamId = $request->integer('team_id');
+        $category = Category::active()->where('team_id', $teamId)->find($request->integer('category_id'));
+        $locationId = $request->integer('location_id') ?: null;
+        $itemId = $request->integer('inventory_item_id') ?: null;
+
+        if (! $category || (! $itemId && (! $locationId || $category->allow_custom))) {
+            return response()->json([]);
+        }
+
+        $me = $request->user();
+        $rows = Report::with(['category', 'location'])->open()->where('team_id', $teamId)
+            ->where(function ($q) use ($itemId, $category, $locationId) {
+                if ($itemId) {
+                    $q->orWhere('inventory_item_id', $itemId);
+                }
+                if ($locationId && ! $category->allow_custom) {
+                    $q->orWhere(fn ($w) => $w->where('category_id', $category->id)->where('location_id', $locationId));
+                }
+            })
+            ->latest()->take(3)->get();
+
+        return response()->json($rows->map(fn (Report $r) => [
+            'number' => $r->report_number,
+            'label' => $r->user_id === $me->id ? $r->title : $r->categoryDisplayName().($r->location ? ' · '.$r->location->name : ''),
+            'status' => $r->statusLabel(),
+            'age' => $r->created_at->diffForHumans(),
+            'mine' => $r->user_id === $me->id,
+            'url' => $r->user_id === $me->id ? route('employee.reports.show', $r) : $r->publicUrl(),
+        ])->values());
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
@@ -95,14 +137,13 @@ class ReportController extends Controller
             'priority' => ['required', Rule::in(array_keys(config('halodek.priorities')))],
             'location_id' => ['nullable', 'exists:locations,id'],
             'inventory_item_id' => ['nullable', 'integer'],
-            'title' => ['required', 'string', 'max:200'],
+            'title' => ['nullable', 'string', 'max:200'],
             'description' => ['required', 'string', 'max:3000'],
             'photos' => ['nullable', 'array', 'max:'.$att['max_files']],
             'photos.*' => ['file', 'mimes:'.implode(',', $att['mimes']), 'max:'.$att['max_kb']],
         ], [
             'team_id.required' => 'Pilih regu tujuan laporan.',
             'category_id.required' => 'Kategori laporan wajib dipilih.',
-            'title.required' => 'Judul laporan wajib diisi.',
             'description.required' => 'Deskripsi laporan wajib diisi.',
             'photos.max' => 'Lampiran maksimal '.$att['max_files'].' foto.',
             'photos.*.mimes' => 'Lampiran harus berupa foto ('.implode(', ', $att['mimes']).').',
@@ -126,6 +167,11 @@ class ReportController extends Controller
             if (! $valid) {
                 return back()->withInput()->withErrors(['inventory_item_id' => 'Barang/ruangan yang dipilih tidak tersedia untuk Anda.']);
             }
+        }
+
+        // Judul boleh dikosongkan: dibuat otomatis "Kategori – Lokasi".
+        if (blank($data['title'] ?? null)) {
+            $data['title'] = $this->autoTitle($category, $data);
         }
 
         $report = $this->reports->create($user, $team, $category, $data, $request->file('photos', []));
@@ -165,6 +211,29 @@ class ReportController extends Controller
         return back()->with('success', 'Balasan terkirim.');
     }
 
+    /** Pelapor: "Sudah beres". */
+    public function confirm(Request $request, Report $report): RedirectResponse
+    {
+        $this->authorize('confirm', $report);
+
+        $this->reports->confirm($report, $request->user());
+
+        return back()->with('success', 'Terima kasih, laporan ditandai sudah beres.');
+    }
+
+    /** Pelapor: "Belum beres, buka lagi". */
+    public function reopen(Request $request, Report $report): RedirectResponse
+    {
+        $this->authorize('reopen', $report);
+
+        $data = $request->validate(['reason' => ['required', 'string', 'max:1000']], [
+            'reason.required' => 'Ceritakan apa yang masih bermasalah.',
+        ]);
+        $this->reports->reopen($report, $request->user(), $data['reason']);
+
+        return back()->with('success', 'Laporan dibuka kembali dan diteruskan ke '.($report->assignee->name ?? $report->team->name).'.');
+    }
+
     public function cancel(Request $request, Report $report): RedirectResponse
     {
         $this->authorize('cancel', $report);
@@ -173,6 +242,14 @@ class ReportController extends Controller
         $this->reports->cancel($report, $request->user(), $data['reason'] ?? null);
 
         return back()->with('success', 'Laporan dibatalkan.');
+    }
+
+    private function autoTitle(Category $category, array $data): string
+    {
+        $name = $category->allow_custom && filled($data['custom_category'] ?? null) ? trim($data['custom_category']) : $category->name;
+        $location = ! empty($data['location_id']) ? Location::find($data['location_id'])?->name : null;
+
+        return \Illuminate\Support\Str::limit($name.($location ? ' – '.$location : ''), 200, '');
     }
 
     /**

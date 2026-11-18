@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Team;
+use App\Support\CategoryDefaults;
 use Illuminate\Database\Seeder;
 
 /**
@@ -60,7 +61,7 @@ class TeamSeeder extends Seeder
             $team = Team::updateOrCreate(['slug' => $data['slug']], $data + ['is_system' => true, 'is_active' => true]);
 
             foreach ($categories as $i => $name) {
-                $team->categories()->firstOrCreate(['name' => $name], ['sort_order' => $i + 1]);
+                $team->categories()->firstOrCreate(['name' => $name], ['sort_order' => $i + 1] + CategoryDefaults::for($name));
             }
             // Setiap regu punya kategori "Lainnya" dengan isian bebas.
             $team->categories()->firstOrCreate(['name' => 'Lainnya'], ['allow_custom' => true, 'sort_order' => 999]);

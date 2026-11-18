@@ -31,6 +31,20 @@
             <div class="card" style="border-color: {{ $report->status === 'ditolak' ? '#FECACA' : '#BBF7D0' }}">
                 <div class="card-head"><h2>{{ ['selesai' => 'Hasil Penyelesaian', 'ditolak' => 'Alasan Penolakan', 'diproses' => 'Catatan Terbaru'][$report->status] }}</h2></div>
                 <div class="card-body pre-line">{{ $report->follow_up_note }}</div>
+                {{-- Sudah beres? Pelapor menjawab langsung di bawah hasil penyelesaian. --}}
+                @can('confirm', $report)
+                    <div class="card-foot" style="display:grid;gap:12px">
+                        <div><p class="strong" style="margin:0">Apakah masalahnya sudah beres?</p>
+                            <p class="text-sm muted" style="margin:4px 0 0">Jika belum, laporan dibuka kembali dan diteruskan ke {{ $report->assignee->name ?? 'regu '.$report->team->name }}.</p></div>
+                        <div class="confirm-actions">
+                            <form method="POST" action="{{ route('employee.reports.confirm', $report) }}">@csrf @method('PATCH')
+                                <button class="btn btn-success btn-block">👍 Sudah beres</button></form>
+                            @can('reopen', $report)<button type="button" class="btn btn-secondary btn-block" data-modal-open="reopen-modal">👎 Belum beres</button>@endcan
+                        </div>
+                    </div>
+                @elseif ($report->satisfied && auth()->user()->can('reopen', $report))
+                    <div class="card-foot text-sm muted">Anda menandai laporan ini sudah beres. Masalahnya muncul lagi? <button type="button" class="link-btn strong" data-modal-open="reopen-modal">Buka kembali</button></div>
+                @endcan
             </div>
         @endif
 
@@ -64,7 +78,7 @@
                 <div><div class="text-xs muted">Kategori</div><div>{{ $report->categoryDisplayName() }}</div></div>
                 <div><div class="text-xs muted">Diajukan</div><div>{{ $report->created_at->translatedFormat('d M Y, H:i') }}</div></div>
                 
-                @if ($report->resolved_at)<div><div class="text-xs muted">Selesai pada</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionHours() }} jam)</span></div></div>@endif
+                @if ($report->resolved_at)<div><div class="text-xs muted">Selesai pada</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionHours() }} jam kerja)</span></div></div>@endif
                 <div><div class="text-xs muted">Penanggung jawab</div><div>{{ $report->assignee->name ?? 'Belum ditugaskan' }}</div></div>
                 @if ($report->location)<div><div class="text-xs muted">Lokasi</div><div>{{ $report->location->fullName() }}</div></div>@endif
                 @if ($report->item)<div><div class="text-xs muted">Barang / ruangan</div><div>{{ $report->item->label() }}</div></div>@endif
@@ -86,3 +100,22 @@
     </div>
 </div>
 @endsection
+
+@push('modals')
+    @can('reopen', $report)
+        <div class="modal" id="reopen-modal" role="dialog" aria-modal="true" aria-labelledby="reopen-title">
+            <div class="modal-dialog sm">
+                <form method="POST" action="{{ route('employee.reports.reopen', $report) }}">
+                    @csrf @method('PATCH')
+                    <input type="hidden" name="_modal" value="reopen-modal">
+                    <div class="modal-head"><h3 id="reopen-title">Buka Kembali Laporan</h3><button type="button" class="btn btn-ghost btn-icon" data-modal-close aria-label="Tutup"><x-icon name="x" :size="18" /></button></div>
+                    <div class="modal-body" style="display:grid;gap:12px">
+                        <x-textarea name="reason" label="Apa yang masih bermasalah?" rows="4" maxlength="1000" required placeholder="Mis. Laptop masih hang setiap membuka Excel." />
+                        <p class="hint" style="margin:0">Bisa dibuka kembali paling lama {{ config('halodek.reopen_days') }} hari setelah laporan diselesaikan.</p>
+                    </div>
+                    <div class="modal-foot"><button type="button" class="btn btn-secondary" data-modal-close>Batal</button><button class="btn btn-primary">Buka Kembali</button></div>
+                </form>
+            </div>
+        </div>
+    @endcan
+@endpush

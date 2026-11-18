@@ -1,85 +1,97 @@
-# HaloDek — Layanan Pengaduan & Pelaporan Terpadu
+# HaloDek
 
-Aplikasi web **Laravel 10** (pure PHP/Blade, **tanpa npm / Node / Vite / CDN**) untuk pengaduan karyawan ke empat regu:
-**IT**, **Sarana dan Prasarana**, **Kesekretariatan**, dan **Keamanan** (Superadmin dapat menambah regu lain).
+Layanan pengaduan dan pelaporan terpadu PT Petrokopindo Cipta Selaras. Karyawan mengajukan laporan ke empat regu (**IT**, **Sarana dan Prasarana**, **Kesekretariatan**, **Keamanan**), lalu regu menangani dan memantaunya sampai selesai. Dibangun dengan Laravel 10 (PHP + Blade), tanpa npm / Node / CDN.
 
-## Kebutuhan
-PHP 8.1+ (pdo_mysql, mbstring, fileinfo, openssl, ctype, tokenizer, xml), MySQL 8 / MariaDB 10.5+, Composer 2 (bila `vendor/` tidak ada).
+## Instalasi di Windows
 
-## Instalasi baru
+**Yang dibutuhkan:** [Laragon Full](https://laragon.org/download/) (sudah berisi PHP, MySQL, dan Composer) dan [Git](https://git-scm.com/download/win).
+
+1. Jalankan Laragon, klik **Start All**.
+2. Buka **Terminal** Laragon (atau Git Bash), lalu unduh proyek:
+   ```bash
+   cd C:/laragon/www
+   git clone https://github.com/muharienal/HaloDek.git
+   cd HaloDek
+   ```
+3. Pasang dependensi dan siapkan pengaturan:
+   ```bash
+   composer install
+   cp .env.example .env
+   php artisan key:generate
+   ```
+4. Buat database kosong bernama `halodek` (Laragon → **Database** → HeidiSQL → buat database baru, atau lewat phpMyAdmin). Pengaturan bawaan di `.env` memakai user `root` tanpa password, sesuai Laragon.
+5. Buat tabel dan akun awal:
+   ```bash
+   php artisan migrate --seed
+   ```
+6. Jalankan:
+   ```bash
+   php artisan serve
+   ```
+   Buka **http://localhost:8000**.
+
+**Login awal (mode lokal):** tab **Admin**, NIK `00001`, password `00001` (Superadmin). Segera ganti password di menu profil.
+
+Ingin data contoh untuk mencoba? Jalankan `php artisan db:seed --class=DemoSeeder` (hanya untuk mode lokal; semua akun demo memakai password = NIK, karyawan cukup NIK).
+
+### Agar bisa dibuka dari komputer lain di jaringan yang sama
+```bash
+php artisan serve --host=0.0.0.0 --port=8000
 ```
-cp .env.example .env
-php artisan key:generate
-# buat database "halodek", sesuaikan DB_* di .env
-php artisan migrate --seed
-php artisan serve
-```
-
-## Upgrade dari versi lama (database sudah berisi data)
-1. Backup: `mysqldump -u USER -p halodek > backup.sql`
-2. Timpa file project dengan isi paket ini, hapus file lama yang tercantum di `HAPUS-FILE-LAMA.txt`.
-3. Jalankan **sekali**: `mysql -u USER -p halodek < database/sql/upgrade_2026_10_29.sql`
-4. `php artisan optimize:clear`
-
-Isi upgrade: tambah regu Kesekretariatan & Keamanan; `users.team_id`; role lama → baru (Admin IT / Admin Sarpras / Admin Regu → **Staf**,
-satu Staf per regu tanpa kepala dijadikan **Kepala Regu**; Admin Regu tanpa regu → Karyawan); aset, software, dan lisensi akses → **item inventaris**
-(`reports.asset_id` → `inventory_item_id`); kolom SLA/rating dihapus; tabel `team_user`, `assets`, `software`, `access_licenses` dihapus.
-Setelah upgrade, cek **Manajemen Pengguna** / halaman **Regu** untuk memastikan Kepala Regu setiap regu sudah benar.
+Ubah `APP_URL` di `.env` ke `http://IP-KOMPUTER-ANDA:8000` (cek IP dengan `ipconfig`), jalankan `php artisan config:clear`, dan izinkan port 8000 di firewall Windows.
 
 ## Peran
-| Peran | Login | Kemampuan |
+
+| Peran | Masuk dengan | Kemampuan |
 |---|---|---|
-| Superadmin | NIK + password | Semua regu, pengguna, lokasi, audit |
-| Kepala Regu | NIK + password | Satu regu: tugaskan staf **atau tangani sendiri**, prioritas, alihkan regu, kategori layanan & kategori inventaris, hapus item, pengumuman |
-| Staf | NIK + password | Satu regu: **ambil** laporan antrean atau kerjakan yang ditugaskan, ubah status + catatan, lepas tugas, kelola item inventaris |
-| Karyawan | NIK saja | Ajukan & pantau laporan sendiri |
-
-## Alur laporan
-1. Karyawan mengajukan laporan ke sebuah regu → masuk **Antrean Regu** (belum ditugaskan); Kepala Regu & staf diberi tahu.
-2. **Kepala Regu** menugaskan seorang staf, atau mengambilnya sendiri.
-3. **Staf** menunggu penugasan, atau langsung **Ambil** laporan yang masih di antrean (tidak bisa mengambil milik orang lain).
-4. Penanggung jawab mengubah status (Menunggu → Diproses → Selesai/Ditolak) dengan catatan; staf bisa **Lepas Tugas** → kembali ke antrean.
-5. Dashboard menampilkan **rata-rata penyelesaian** (tanpa SLA dan tanpa rating).
-
-## Inventaris per regu
-Tiap regu punya kategori sendiri (mis. Laptop, AC, Ruangan, APAR) dan item di dalamnya (kode, nama, status, pemegang, lokasi, tanggal perolehan, jatuh tempo, catatan).
-Kategori & hapus item: Kepala Regu/Superadmin. Tambah/ubah item: anggota regu. Impor/ekspor CSV tersedia. Karyawan dapat mengaitkan laporan ke item.
-
-## Sesi berakhir (419)
-Halaman login dikirim dengan `Cache-Control: no-store` sehingga token tidak basi dari cache browser; bila token tetap kedaluwarsa,
-pengguna diarahkan kembali ke login dengan pesan ramah (bukan halaman 419), dan halaman login memuat ulang token otomatis saat tab kembali aktif.
-
-## Akun demo (APP_ENV=local, `php artisan db:seed --class=DemoSeeder`)
-Password = NIK. Superadmin 00001; Kepala Regu 00002 (IT), 00003 (Sarpras), 00006 (Kesekretariatan), 00015 (Keamanan); Staf 00007, 00011–00014, 00016, 00017; Karyawan 00004, 00005, 00008–00010.
-
-## Keamanan
-
-- **Login terpisah tegas.** Tab *Karyawan* hanya menerima akun karyawan (NIK saja). Tab *Admin* hanya menerima Kepala Regu, Staf, Superadmin dengan NIK + password. Akun karyawan tidak bisa masuk lewat tab Admin dengan password apa pun, dan sebaliknya. Pesan galat sengaja generik dan waktu respons disamakan agar NIK tidak bisa ditebak.
-- **Tanpa password tebakan.** Pengelola baru / hasil reset mendapat password sementara acak yang tampil satu kali dan wajib diganti saat login pertama. Akun karyawan memakai password acak yang tidak diketahui siapa pun. Password baru minimal 10 karakter (huruf besar, kecil, angka). Mengganti password mengeluarkan perangkat lain.
-- **Header keamanan.** CSP dengan nonce per permintaan, `X-Frame-Options: DENY`, `nosniff`, Referrer-Policy, Permissions-Policy, HSTS (saat HTTPS). Sesi dienkripsi; cookie "ingat saya" 14 hari.
-- **Pembatasan laju** untuk login, penulisan data, kirim laporan, ganti password, impor/ekspor.
-- **Lampiran** hanya foto (jpg/png/webp, maks. 5 foto), disimpan di storage privat, hanya bisa dibuka pihak berwenang; tipe selain foto selalu diunduh.
-- **Checklist produksi:** `APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SECURE_COOKIE=true`, HTTPS, web root = folder `public`, jangan jalankan `DemoSeeder` (hanya untuk lokal). Password Superadmin awal dicetak sekali oleh seeder di luar mode lokal.
-- **Database lama:** akun pengelola yang password-nya masih sama dengan NIK harus di-reset (Pengguna → Atur ulang password).
+| Superadmin | NIK + password (tab Admin) | Semua regu, pengguna, lokasi, audit |
+| Kepala Regu | NIK + password (tab Admin) | Mengelola satu regu, menugaskan atau menangani sendiri, pengumuman |
+| Staf | NIK + password (tab Admin) | Mengambil dan mengerjakan laporan regunya |
+| Karyawan | NIK saja (tab Karyawan) | Mengajukan dan memantau laporan sendiri |
 
 ## Notifikasi WhatsApp (opsional)
 
-Setiap laporan **baru** (semua regu) dikirim ke nomor manager berisi nomor tiket, regu, judul, dan link ke laporannya. Perubahan status tidak dikirim. Atur di `.env`:
+Laporan baru dari regu mana pun bisa dikirim ke WhatsApp manager lewat Fonnte atau Wablas, berisi ringkasan dan link pantau. Isi di `.env`, lalu `php artisan config:clear`:
 
 ```
-WA_DRIVER=log        # off | log | fonnte | wablas   (mulai dari "log": pesan hanya ditulis ke storage/logs)
-WA_TO=628123456789   # nomor manager, pisahkan koma bila lebih dari satu
-WA_TOKEN=            # token dari Fonnte / Wablas
-WA_SECRET=           # Wablas saja, jika akun memakai secret key
-WABLAS_URL=          # Wablas saja, server sesuai akun Anda
-APP_URL=http://192.168.x.x:8000   # alamat yang bisa dibuka dari HP manager
+WA_DRIVER=fonnte        # off | log | fonnte | wablas
+WA_TO=628123456789      # nomor penerima, pisahkan dengan koma
+WA_TOKEN=               # token dari Fonnte / Wablas
 ```
 
-Lalu `php artisan config:clear`. Gunakan nomor pengirim khusus (bukan nomor pribadi). Link di pesan membuka halaman pantau **hanya-baca tanpa login** (`/p/{id}/{token}`, token 16 karakter turunan `APP_KEY`: tidak bisa ditebak atau diubah; tanpa NIK, lampiran, maupun komentar). Siapa pun yang memegang tautan itu bisa melihat laporannya, jadi jangan disebar. Gagal kirim hanya dicatat di log dan tidak mengganggu laporan.
+Karyawan juga bisa mengisi nomor WhatsApp sendiri (popup saat login, atau menu Profil). Nomor itu menerima kabar singkat dan link pantau saat laporannya **diproses**, **selesai**, atau **ditolak**. Memakai pengaturan `WA_*` yang sama. Hanya satu nomor per pengguna (kolom No. WhatsApp), otomatis diformat `62…`; selama belum diisi, header menampilkan lencana "Isi nomor WA".
+
+## Fitur lain
+
+- **Laporan Bulanan:** menu Kelola Laporan → Laporan Bulanan. Ringkasan per regu (jumlah, waktu rata-rata, kategori terbanyak); unduh Excel atau cetak/simpan PDF.
+- **Pencarian:** ikon kaca pembesar di bilah atas (pintasan tombol `/`). Hasil mengikuti hak akses. Di halaman daftar laporan, kolom yang sama langsung menyaring daftar itu.
+- **Tutup cepat:** di detail laporan ada tombol **Selesaikan** dan **Tolak** (satu catatan wajib). Ubah status manual tetap ada untuk kasus khusus.
+- **Sudah beres?** Setelah laporan selesai, pelapor menjawab 👍/👎. Pilih *Belum beres* membuka kembali laporan ke penanggung jawabnya (maks. 7 hari, atur `reopen_days` di `config/halodek.php`).
+- **Form lapor ringkas:** pelapor bisa mengetik masalahnya (mis. "wifi", "AC") untuk langsung memilih kategori dan regu. Judul boleh kosong (otomatis "Kategori – Lokasi"). Kata kunci dan petunjuk deskripsi tiap kategori diatur Kepala Regu di menu Regu.
+- **Aksi massal:** centang beberapa laporan aktif di Kelola Laporan, lalu ambil, tugaskan (Kepala Regu), selesaikan, atau tolak sekaligus (maks. 50).
+- **Hubungi via WA:** tombol di detail laporan membuka chat WhatsApp ke pelapor dengan pesan pembuka terisi.
+- **Laporan serupa:** saat melapor dengan kategori + lokasi (atau barang) yang sama dengan laporan yang masih aktif, pelapor diberi tahu dan bisa memantau laporan itu.
+- **Ekspor laporan:** format Excel (.xlsx). Ekspor pengguna dan inventaris tetap CSV karena dipakai ulang untuk impor.
+- **PWA:** ikon HaloDek bisa dipasang di layar HP. Pemasangan penuh dan mode offline hanya aktif lewat **HTTPS** (atau localhost); lewat HTTP biasa tetap bisa dipakai sebagai shortcut.
+
+## Jam kerja, batas respons, dan pengingat
+
+- Semua durasi (rata-rata penyelesaian, respons pertama, ekspor) dihitung dalam **jam kerja Senin–Jumat 07.00–16.00 WIB**, bukan jam kalender. Ubah di `config/halodek.php` → `work_hours`.
+- Hari libur: tambahkan di `.env`, mis. `HALODEK_LIBUR=2026-12-25,2027-01-01`, lalu `php artisan config:clear`.
+- **Batas respons** (jam kerja) per prioritas: Mendesak 1, Tinggi 2, Sedang 4, Rendah 8 (`response_sla`). Laporan yang belum diambil melewati batas ditandai **Lewat batas** di dasbor, daftar, dan detail.
+- **Pengingat WA ke Kepala Regu** (ke nomor di profilnya; jika kosong, ke `WA_TO`) dikirim sekali per laporan, hanya pada jam kerja.
+
+Pengingat berjalan **otomatis dari dalam aplikasi**, tanpa Task Scheduler atau cron: setiap kali ada yang membuka HaloDek, sistem mengecek paling sering sekali per 15 menit. Selama HaloDek dipakai pada jam kerja, pengingat terkirim. Uji manual: `php artisan halodek:pengingat --dry-run`. Matikan dengan `HALODEK_PENGINGAT_OTOMATIS=false` di `.env`.
+
+> Setelah memperbarui kode, selalu jalankan `php artisan migrate` (menambah kolom baru dan mengisi kata kunci kategori bawaan).
+
+## Catatan keamanan
+
+- Jangan pernah meng-commit file `.env` (sudah diabaikan oleh Git).
+- Untuk server sungguhan: `APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SECURE_COOKIE=true`, pakai HTTPS, arahkan web root ke folder `public`, dan jangan jalankan `DemoSeeder`.
 
 ## Pengujian
-```
-php vendor/bin/phpunit      # SQLite in-memory
-```
 
-© 2026 IT PT Petrokopindo Cipta Selaras.
+```bash
+php vendor/bin/phpunit
+```

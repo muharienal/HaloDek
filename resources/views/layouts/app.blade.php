@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Dashboard') — {{ config('halodek.name') }}</title>
+    <title>@yield('title', 'Dashboard') · {{ config('halodek.name') }}</title>
     @include('partials.head-icons')
     <link rel="stylesheet" href="{{ asset('css/halodek.css') }}?v={{ filemtime(public_path('css/halodek.css')) }}">
     @stack('head')
@@ -32,8 +32,8 @@
         <a href="{{ route('dashboard') }}" class="lockup" aria-label="{{ config('halodek.name') }}">
             <span class="co-tile"><img src="{{ asset('images/logo-pcs.png') }}" alt="{{ config('halodek.company') }}"></span>
             <span class="lockup-sep"></span>
-            <span class="lockup-mark"><x-icon name="halodek" :size="24" /></span>
-            <span class="lockup-name">{{ config('halodek.name') }}</span>
+            <img class="lockup-mark" src="{{ asset('images/halodek-icon.svg') }}" alt="">
+            <img class="lockup-name" src="{{ asset('images/halodek-wordmark.svg') }}" alt="{{ config('halodek.name') }}">
         </a>
 
         <nav class="topnav-links" aria-label="Menu utama">
@@ -41,16 +41,17 @@
 
             @if ($isAdmin)
                 <div class="dropdown nav-dd">
-                    <button type="button" class="nav-link {{ $act($on('admin.reports.*', 'admin.teams.*')) }}" data-dropdown-toggle aria-expanded="false">
+                    <button type="button" class="nav-link {{ $act($on('admin.reports.*', 'admin.teams.*', 'admin.monthly.*')) }}" data-dropdown-toggle aria-expanded="false">
                         Kelola Laporan
                         @if ($pendingCount > 0)<span class="count">{{ $pendingCount }}</span>@endif
                         <x-icon name="chevron-down" :size="13" />
                     </button>
                     <div class="dropdown-menu">
                         <a class="dropdown-item {{ $act($on('admin.reports.*') && ! $mineTasks && ! $queueView) }}" href="{{ route('admin.reports.index') }}">Semua Laporan</a>
-                        <a class="dropdown-item {{ $act($queueView) }}" href="{{ route('admin.reports.index', ['assigned' => 'none', 'status' => 'aktif']) }}">Antrean Regu @if ($pendingCount > 0)<span class="count ml-auto">{{ $pendingCount }}</span>@endif</a>
+                        <a class="dropdown-item {{ $act($queueView) }}" href="{{ route('admin.reports.index', ['assigned' => 'none', 'status' => 'aktif']) }}">Menunggu Diambil @if ($pendingCount > 0)<span class="count ml-auto">{{ $pendingCount }}</span>@endif</a>
                         <a class="dropdown-item {{ $act($mineTasks) }}" href="{{ route('admin.reports.index', ['assigned' => 'me', 'status' => 'aktif']) }}">Tugas Saya</a>
                         <a class="dropdown-item {{ $act($on('admin.teams.*')) }}" href="{{ route('admin.teams.index') }}">{{ $me->isSuperadmin() ? 'Regu & Kategori' : 'Regu Saya' }}</a>
+                        <a class="dropdown-item {{ $act($on('admin.monthly.*')) }}" href="{{ route('admin.monthly.index') }}">Laporan Bulanan</a>
                     </div>
                 </div>
 
@@ -88,6 +89,30 @@
 
         <div class="topnav-actions">
             <a href="{{ route('employee.reports.create') }}" class="btn btn-cta btn-sm btn-new"><x-icon name="plus" :size="15" /> Ajukan Laporan</a>
+
+            @if ($needsWa ?? false)
+                <button type="button" class="wa-chip" data-modal-open="wa-modal" title="Isi nomor WhatsApp untuk kabar laporan otomatis">
+                    <span class="wa-dot"></span><x-icon name="phone" :size="15" /><span class="wa-chip-t">Isi nomor WA</span>
+                </button>
+            @endif
+            <div class="dropdown search-dd">
+                <button class="icon-btn" type="button" data-dropdown-toggle data-search-toggle aria-label="Cari laporan" aria-expanded="false" title="Cari (tekan /)"><x-icon name="search" :size="18" /></button>
+                <div class="dropdown-menu menu-search">
+                    @php
+                        // Di halaman daftar laporan, kolom ini menyaring daftar itu (filter lain tetap dipertahankan).
+                        $listSearch = request()->routeIs('admin.reports.index', 'employee.reports.index');
+                        $carry = $listSearch ? collect(request()->except(['q', 'page']))->filter(fn ($v) => is_scalar($v) && $v !== '') : collect();
+                    @endphp
+                    <form method="GET" action="{{ $listSearch ? url()->current() : route('search') }}" role="search">
+                        <label class="label" for="q-nav">{{ $listSearch ? 'Cari di daftar ini' : 'Cari laporan' }}</label>
+                        @foreach ($carry as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                        <div class="flex gap-2">
+                            <input class="input" id="q-nav" type="search" name="q" maxlength="60" value="{{ $listSearch ? request('q') : '' }}" placeholder="{{ $isAdmin ? 'No. laporan, judul, nama / NIK pelapor' : 'No. laporan atau judul' }}" autocomplete="off" @unless ($listSearch) required minlength="2" @endunless>
+                            <button class="btn btn-primary btn-icon" aria-label="Cari"><x-icon name="search" :size="16" /></button>
+                        </div>
+                    </form>
+                </div>
+            </div>
 
             <div class="dropdown bell">
                 <button class="icon-btn" type="button" data-dropdown-toggle aria-label="Notifikasi" aria-expanded="false"><x-icon name="bell" :size="18" /></button>
@@ -172,6 +197,7 @@
         <a class="tile" href="{{ route('employee.reports.create') }}"><span class="tile-ico tone-green"><x-icon name="plus" :size="22" /></span>Ajukan</a>
         <a class="tile {{ $act($on('employee.reports.index', 'employee.reports.show')) }}" href="{{ route('employee.reports.index') }}"><span class="tile-ico tone-violet"><x-icon name="document" :size="22" /></span>Laporan Saya</a>
         <a class="tile {{ $act($on('announcements.*')) }}" href="{{ route('announcements.index') }}"><span class="tile-ico tone-amber"><x-icon name="megaphone" :size="22" /></span>Pengumuman</a>
+        <a class="tile {{ $act($on('search')) }}" href="{{ route('search') }}"><span class="tile-ico tone-teal"><x-icon name="search" :size="22" /></span>Cari</a>
         <a class="tile" href="{{ route('notifications.index') }}"><span class="tile-ico tone-red"><x-icon name="bell" :size="22" />@if ($unreadCount > 0)<i class="bn-dot"></i>@endif</span>Notifikasi</a>
         <a class="tile" href="{{ route('profile.edit') }}"><span class="tile-ico tone-gray"><x-icon name="user" :size="22" /></span>Profil</a>
     </div>
@@ -180,9 +206,10 @@
         <div class="sheet-title">Kelola</div>
         <div class="sheet-grid">
             <a class="tile {{ $act($on('admin.reports.*') && ! $mineTasks && ! $queueView) }}" href="{{ route('admin.reports.index') }}"><span class="tile-ico tone-blue"><x-icon name="inbox" :size="22" /></span>Semua Laporan</a>
-            <a class="tile {{ $act($queueView) }}" href="{{ route('admin.reports.index', ['assigned' => 'none', 'status' => 'aktif']) }}"><span class="tile-ico tone-orange"><x-icon name="list" :size="22" />@if ($pendingCount > 0)<i class="bn-dot"></i>@endif</span>Antrean Regu</a>
+            <a class="tile {{ $act($queueView) }}" href="{{ route('admin.reports.index', ['assigned' => 'none', 'status' => 'aktif']) }}"><span class="tile-ico tone-orange"><x-icon name="list" :size="22" />@if ($pendingCount > 0)<i class="bn-dot"></i>@endif</span>Menunggu Diambil</a>
             <a class="tile {{ $act($mineTasks) }}" href="{{ route('admin.reports.index', ['assigned' => 'me', 'status' => 'aktif']) }}"><span class="tile-ico tone-green"><x-icon name="check-circle" :size="22" /></span>Tugas Saya</a>
             <a class="tile {{ $act($on('admin.teams.*')) }}" href="{{ route('admin.teams.index') }}"><span class="tile-ico tone-violet"><x-icon name="users" :size="22" /></span>{{ $me->isSuperadmin() ? 'Regu' : 'Regu Saya' }}</a>
+            <a class="tile {{ $act($on('admin.monthly.*')) }}" href="{{ route('admin.monthly.index') }}"><span class="tile-ico tone-teal"><x-icon name="chart" :size="22" /></span>Laporan Bulanan</a>
             <a class="tile {{ $act($on('admin.inventory.*')) }}" href="{{ route('admin.inventory.index') }}"><span class="tile-ico tone-amber"><x-icon name="laptop" :size="22" /></span>Inventaris</a>
             @if ($canLocations)
                 <a class="tile {{ $act($on('admin.locations.*')) }}" href="{{ route('admin.locations.index') }}"><span class="tile-ico tone-red"><x-icon name="pin" :size="22" /></span>Lokasi</a>
@@ -196,6 +223,10 @@
 
     <form method="POST" action="{{ route('logout') }}" class="mt-4">@csrf<button class="btn btn-soft-danger btn-block" data-no-lock><x-icon name="logout" :size="17" /> Keluar</button></form>
 </aside>
+
+@if ($needsWa ?? false)
+    <x-wa-prompt :show="$showWaPrompt ?? false" />
+@endif
 
 @stack('modals')
 

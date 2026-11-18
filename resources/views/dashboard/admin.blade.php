@@ -7,69 +7,62 @@
         <div class="alert alert-warning">Anda belum tergabung di regu mana pun. Hubungi Superadmin agar dimasukkan ke regu.</div>
     @endif
 
-    {{-- ===== KARTU UTAMA ===== --}}
+    @if ($stats['overdue'] > 0)
+        <div class="alert alert-error overdue-alert">
+            <x-icon name="clock" :size="18" />
+            <div class="grow"><strong>{{ $stats['overdue'] }} laporan lewat batas respons</strong> dan belum diambil siapa pun.
+                <span class="muted">Batas dihitung dalam jam kerja ({{ \App\Support\WorkHours::label() }}).</span></div>
+            <a class="btn btn-sm btn-danger" href="{{ route('admin.reports.index', ['status' => 'aktif', 'lewat' => 1]) }}">Lihat</a>
+        </div>
+    @endif
+
+    {{-- ===== 4 ANGKA UTAMA ===== --}}
     @include('partials.hero', ['metrics' => [
-        ['value' => $stats['unassigned'], 'label' => 'Antrean Regu', 'href' => route('admin.reports.index', ['assigned' => 'none', 'status' => 'aktif']), 'warn' => $stats['unassigned'] > 0],
+        ['value' => $stats['unassigned'], 'label' => 'Menunggu Diambil', 'href' => route('admin.reports.index', ['assigned' => 'none', 'status' => 'aktif']), 'warn' => $stats['unassigned'] > 0],
         ['value' => $stats['mine'], 'label' => 'Tugas Saya', 'href' => route('admin.reports.index', ['assigned' => 'me', 'status' => 'aktif'])],
-        ['value' => $stats['diproses'], 'label' => 'Diproses', 'href' => route('admin.reports.index', ['status' => 'diproses'])],
-        ['value' => $stats['selesai'], 'label' => 'Selesai', 'href' => route('admin.reports.index', ['status' => 'selesai'])],
+        ['value' => $stats['diproses'], 'label' => 'Sedang Diproses', 'href' => route('admin.reports.index', ['status' => 'diproses'])],
+        ['value' => $stats['avg_hours'] !== null ? $stats['avg_hours'].' jam' : '–', 'label' => 'Rata-rata Selesai', 'href' => route('admin.monthly.index')],
     ]])
 
-    @php $pct = $stats['total'] ? round($stats['selesai'] / $stats['total'] * 100) : 0; @endphp
-    <div class="grid cols-4 mt-4">
-        <div class="card stat"><span class="lbl">Rata-rata Penyelesaian</span><span class="num">{{ $stats['avg_hours'] !== null ? $stats['avg_hours'].' jam' : '–' }}</span><span class="hint faint">90 hari terakhir</span></div>
-        <div class="card stat"><span class="lbl">Tingkat Selesai</span><span class="num">{{ $pct }}%</span>
-            <div class="progress mt-1"><span style="width: {{ $pct }}%"></span></div></div>
-        <div class="card stat"><span class="lbl">Total Laporan</span><span class="num">{{ $stats['total'] }}</span></div>
-        <div class="card stat"><span class="lbl">Ditolak / Dibatalkan</span><span class="num">{{ $stats['ditolak'] + $stats['dibatalkan'] }}</span></div>
-    </div>
-
-    <div class="grid cols-main mt-5">
-        {{-- ===== ANTREAN REGU ===== --}}
-        <div class="card">
-            <div class="card-head"><h2>Antrean Regu</h2><a href="{{ route('admin.reports.index', ['assigned' => 'none', 'status' => 'aktif']) }}" class="text-sm strong">Lihat semua</a></div>
-            @if ($queue->isEmpty())
-                <x-empty icon="check-circle" title="Antrean kosong">Semua laporan aktif sudah ada penanggung jawabnya.</x-empty>
-            @else
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead><tr><th>Laporan</th><th>Regu</th><th>Prioritas</th><th></th></tr></thead>
-                        <tbody>
-                        @foreach ($queue as $r)
-                            <tr>
-                                <td><a class="mono strong" href="{{ route('admin.reports.show', $r) }}">{{ $r->report_number }}</a> <span class="text-xs muted">· {{ $r->created_at->diffForHumans() }}</span><div class="truncate text-sm" style="max-width:300px">{{ $r->title }}</div></td>
-                                <td><x-team-chip :team="$r->team" /></td>
-                                <td><x-badge :tone="$r->priorityTone()" plain>{{ $r->priorityLabel() }}</x-badge></td>
-                                <td>
+    {{-- ===== SATU TABEL: yang perlu ditangani sekarang ===== --}}
+    <div class="card mt-5">
+        <div class="card-head"><h2>Perlu Ditangani</h2><a href="{{ route('admin.reports.index', ['status' => 'aktif']) }}" class="text-sm strong">Lihat semua</a></div>
+        @if ($todo->isEmpty())
+            <x-empty icon="check-circle" title="Semua beres">Tidak ada laporan yang menunggu diambil atau tugas aktif untuk Anda.</x-empty>
+        @else
+            <div class="table-wrap">
+                <table class="table">
+                    <thead><tr><th>Laporan</th><th>Regu</th><th>Prioritas</th><th>Keadaan</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach ($todo as $r)
+                        <tr>
+                            <td><a class="mono strong" href="{{ route('admin.reports.show', $r) }}">{{ $r->report_number }}</a> <span class="text-xs muted">· {{ $r->created_at->diffForHumans() }}</span>
+                                <div class="truncate text-sm" style="max-width:360px">{{ $r->title }}</div></td>
+                            <td><x-team-chip :team="$r->team" /></td>
+                            <td><x-badge :tone="$r->priorityTone()" plain>{{ $r->priorityLabel() }}</x-badge></td>
+                            <td>
+                                @if ($r->assigned_to_id === auth()->id())
+                                    <span class="badge tone-blue plain">Tugas saya</span>
+                                @else
+                                    <span class="badge tone-amber plain">Menunggu diambil</span>
+                                @endif
+                                @if ($overdue->contains('id', $r->id))<span class="badge tone-red plain overdue-badge">Lewat batas</span>@endif
+                            </td>
+                            <td class="text-right nowrap">
+                                @if (! $r->assigned_to_id)
                                     @can('claim', $r)
-                                        <form method="POST" action="{{ route('admin.reports.take', $r) }}">@csrf<button class="btn btn-primary btn-sm">Ambil</button></form>
+                                        <form method="POST" action="{{ route('admin.reports.take', $r) }}" style="display:inline">@csrf<button class="btn btn-primary btn-sm">Ambil</button></form>
                                     @endcan
-                                </td>
-                            </tr>
-                        @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @endif
-        </div>
-
-        <div style="display:grid;gap:20px;align-content:start">
-            {{-- ===== TUGAS SAYA ===== --}}
-            <div class="card">
-                <div class="card-head"><h2>Tugas Saya</h2><a href="{{ route('admin.reports.index', ['assigned' => 'me', 'status' => 'aktif']) }}" class="text-sm strong">Lihat semua</a></div>
-                <div class="card-body" style="display:grid;gap:12px">
-                    @forelse ($myTasks as $r)
-                        <a href="{{ route('admin.reports.show', $r) }}" style="color:inherit;text-decoration:none;display:block">
-                            <div class="flex items-center gap-2 wrap"><span class="mono strong">{{ $r->report_number }}</span><x-badge :tone="$r->priorityTone()" plain>{{ $r->priorityLabel() }}</x-badge></div>
-                            <div class="truncate text-sm muted">{{ $r->title }}</div>
-                        </a>
-                    @empty
-                        <p class="muted text-sm">Belum ada tugas. Ambil laporan dari antrean regu.</p>
-                    @endforelse
-                </div>
+                                @else
+                                    <a class="btn btn-secondary btn-sm" href="{{ route('admin.reports.show', $r) }}">Buka</a>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
             </div>
-
-        </div>
+        @endif
     </div>
 
     {{-- ===== GRAFIK ===== --}}

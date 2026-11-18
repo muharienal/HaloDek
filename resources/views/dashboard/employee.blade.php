@@ -7,7 +7,7 @@
         ['value' => $stats['total'], 'label' => 'Total', 'href' => route('employee.reports.index')],
         ['value' => $stats['aktif'], 'label' => 'Berjalan', 'href' => route('employee.reports.index', ['status' => 'aktif'])],
         ['value' => $stats['selesai'], 'label' => 'Selesai', 'href' => route('employee.reports.index', ['status' => 'selesai'])],
-        ['value' => $stats['lainnya'], 'label' => 'Ditolak / Batal', 'href' => route('employee.reports.index')],
+        ['value' => $stats['lainnya'], 'label' => 'Ditolak / Batal', 'href' => route('employee.reports.index', ['status' => 'ditutup'])],
     ]])
 
     <div class="card mt-5">

@@ -35,6 +35,7 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
     // Profil & ganti password
     Route::get('/profil', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profil', [ProfileController::class, 'update'])->name('profile.update');
+    Route::put('/profil/whatsapp', [ProfileController::class, 'whatsapp'])->middleware('throttle:30,1')->name('profile.whatsapp');
     Route::put('/profil/password', [ProfileController::class, 'password'])->middleware('throttle:password')->name('profile.password');
 
     // Notifikasi
@@ -48,16 +49,20 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
 
     // Pengumuman
     Route::get('/pengumuman', [AnnouncementController::class, 'index'])->name('announcements.index');
+    Route::get('/cari', [\App\Http\Controllers\SearchController::class, 'index'])->middleware('throttle:60,1')->name('search');
 
     // ----- Laporan saya (pelapor) -----
     Route::prefix('laporan-saya')->name('employee.reports.')->group(function () {
         Route::get('/', [Employee\ReportController::class, 'index'])->name('index');
         Route::get('/buat', [Employee\ReportController::class, 'create'])->name('create');
         Route::get('/barang', [Employee\ReportController::class, 'items'])->name('items');
+        Route::get('/serupa', [Employee\ReportController::class, 'similar'])->middleware('throttle:60,1')->name('similar');
         Route::post('/', [Employee\ReportController::class, 'store'])->middleware('throttle:submit')->name('store');
         Route::get('/{report}', [Employee\ReportController::class, 'show'])->name('show');
         Route::post('/{report}/balas', [Employee\ReportController::class, 'comment'])->middleware('throttle:submit')->name('comment');
         Route::patch('/{report}/batal', [Employee\ReportController::class, 'cancel'])->name('cancel');
+        Route::patch('/{report}/beres', [Employee\ReportController::class, 'confirm'])->name('confirm');
+        Route::patch('/{report}/buka-lagi', [Employee\ReportController::class, 'reopen'])->middleware('throttle:submit')->name('reopen');
     });
 
     // ===== AREA PENGELOLA (Superadmin, Kepala Regu, Staf Regu) =====
@@ -66,9 +71,16 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
         // Laporan & tindak lanjut
         Route::get('/laporan', [Admin\ReportController::class, 'index'])->name('reports.index');
         Route::get('/laporan/ekspor', [Admin\ReportController::class, 'export'])->middleware('throttle:bulk')->name('reports.export');
+        Route::post('/laporan/massal', [Admin\ReportController::class, 'bulk'])->middleware('throttle:bulk')->name('reports.bulk');
         Route::get('/laporan/{report}', [Admin\ReportController::class, 'show'])->name('reports.show');
+
+        // Laporan bulanan (ringkasan per regu; Excel dan cetak PDF)
+        Route::get('/laporan-bulanan', [Admin\MonthlyReportController::class, 'index'])->name('monthly.index');
+        Route::get('/laporan-bulanan/cetak', [Admin\MonthlyReportController::class, 'print'])->name('monthly.print');
+        Route::get('/laporan-bulanan/unduh', [Admin\MonthlyReportController::class, 'download'])->middleware('throttle:bulk')->name('monthly.download');
         Route::get('/laporan/{report}/cetak', [Admin\ReportController::class, 'print'])->name('reports.print');
         Route::patch('/laporan/{report}', [Admin\ReportController::class, 'update'])->name('reports.update');
+        Route::post('/laporan/{report}/tutup', [Admin\ReportController::class, 'close'])->name('reports.close');
         Route::post('/laporan/{report}/ambil', [Admin\ReportController::class, 'take'])->name('reports.take');
         Route::post('/laporan/{report}/lepas', [Admin\ReportController::class, 'release'])->name('reports.release');
         Route::post('/laporan/{report}/pindah', [Admin\ReportController::class, 'transfer'])->name('reports.transfer');

@@ -51,6 +51,8 @@ class CategoryController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100', Rule::unique('categories', 'name')->where('team_id', $team->id)->ignore($ignoreId)],
+            'keywords' => ['nullable', 'string', 'max:255'],
+            'hint' => ['nullable', 'string', 'max:255'],
             'allow_custom' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ], [
@@ -58,6 +60,10 @@ class CategoryController extends Controller
             'name.unique' => 'Kategori ini sudah ada di regu tersebut.',
         ]);
 
+        // Rapikan kata kunci: huruf kecil, dipisah koma, tanpa duplikat.
+        $data['keywords'] = collect(explode(',', mb_strtolower((string) ($data['keywords'] ?? ''))))
+            ->map(fn ($k) => trim(preg_replace('/\s+/', ' ', $k)))->filter()->unique()->implode(', ') ?: null;
+        $data['hint'] = filled($data['hint'] ?? null) ? trim($data['hint']) : null;
         $data['allow_custom'] = $request->boolean('allow_custom');
         $data['is_active'] = $request->boolean('is_active', true);
 

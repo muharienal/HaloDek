@@ -21,8 +21,8 @@
 <div class="grid cols-4">
     <div class="card stat"><span class="lbl">Laporan aktif</span><span class="num">{{ $stats['open'] }}</span></div>
     <div class="card stat"><span class="lbl">Total laporan</span><span class="num">{{ $stats['total'] }}</span></div>
-    <div class="card stat"><span class="lbl">Antrean (belum ditugaskan)</span><span class="num">{{ $stats['unassigned'] }}</span></div>
-    <div class="card stat"><span class="lbl">Rata-rata penyelesaian</span><span class="num">{{ $stats['avg_hours'] !== null ? $stats['avg_hours'] : '–' }}<span class="text-sm muted"> jam</span></span></div>
+    <div class="card stat"><span class="lbl">Menunggu diambil</span><span class="num">{{ $stats['unassigned'] }}</span></div>
+    <div class="card stat"><span class="lbl">Rata-rata penyelesaian</span><span class="num">{{ $stats['avg_hours'] !== null ? $stats['avg_hours'] : '–' }}<span class="text-sm muted"> jam kerja</span></span></div>
 </div>
 
 <div class="grid cols-main mt-5" style="align-items:start">
@@ -36,11 +36,12 @@
                 <tbody>
                 @forelse ($team->categories as $c)
                     <tr>
-                        <td class="strong">{{ $c->name }} @if ($c->allow_custom)<span class="badge tone-violet plain" title="Pelapor wajib menyebut kategori sendiri">Isi bebas</span>@endif @unless ($c->is_active)<span class="badge tone-gray plain">Nonaktif</span>@endunless</td>
+                        <td class="strong">{{ $c->name }} @if ($c->allow_custom)<span class="badge tone-violet plain" title="Pelapor wajib menyebut kategori sendiri">Isi bebas</span>@endif @unless ($c->is_active)<span class="badge tone-gray plain">Nonaktif</span>@endunless
+                            @if ($c->keywords)<div class="text-xs muted" style="font-weight:400;max-width:520px">Kata kunci: {{ $c->keywords }}</div>@endif</td>
                         <td>{{ $c->reports_count }}</td>
                         <td>@if ($canLead)<div class="actions">
                             <button class="btn btn-secondary btn-sm btn-icon" aria-label="Ubah" data-modal-open="category-modal" data-title="Ubah Kategori" data-action="{{ route('admin.categories.update', $c) }}"
-                                    data-fill="{{ json_encode(['name' => $c->name, 'allow_custom' => $c->allow_custom, 'is_active' => $c->is_active]) }}"><x-icon name="edit" :size="15" /></button>
+                                    data-fill="{{ json_encode(['name' => $c->name, 'keywords' => $c->keywords, 'hint' => $c->hint, 'allow_custom' => $c->allow_custom, 'is_active' => $c->is_active]) }}"><x-icon name="edit" :size="15" /></button>
                             <form method="POST" action="{{ route('admin.categories.destroy', $c) }}" data-confirm="Hapus kategori &quot;{{ $c->name }}&quot;?" data-confirm-title="Hapus kategori">
                                 @csrf @method('DELETE')<button class="btn btn-soft-danger btn-sm btn-icon" aria-label="Hapus"><x-icon name="trash" :size="15" /></button></form>
                         </div>@endif</td>
@@ -84,6 +85,8 @@
     <x-form-modal id="category-modal" create-title="Tambah Kategori" edit-title="Ubah Kategori" :action="route('admin.categories.store', $team)">
         <div style="display:grid;gap:16px">
             <x-input name="name" label="Nama kategori" required maxlength="100" />
+            <x-input name="keywords" label="Kata kunci pencarian" maxlength="255" placeholder="Mis. wifi, internet, jaringan, lambat" hint="Pisahkan dengan koma. Dipakai saat pelapor mengetik masalahnya di form lapor." />
+            <x-input name="hint" label="Petunjuk isi deskripsi" maxlength="255" placeholder="Mis. Di lokasi mana? Semua perangkat terdampak atau hanya satu?" hint="Tampil sebagai contoh di kolom deskripsi saat kategori ini dipilih." />
             <label class="check"><input type="hidden" name="allow_custom" value="0"><input type="checkbox" name="allow_custom" value="1" @checked(old('allow_custom'))> Pelapor wajib menyebut kategori sendiri (untuk “Lainnya”)</label>
             <label class="check"><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" checked> Aktif (tampil di form pelaporan)</label>
         </div>

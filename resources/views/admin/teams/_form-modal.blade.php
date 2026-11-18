@@ -2,7 +2,7 @@
     <div style="display:grid;gap:16px">
         <div class="form-grid">
             <x-input name="name" label="Nama regu" required maxlength="100" placeholder="Mis. Regu K3 & Keselamatan" />
-            <x-input name="code" label="Kode tiket" required maxlength="6" placeholder="Mis. K3" style="text-transform:uppercase" />
+            <x-input name="code" label="Kode nomor laporan" required maxlength="6" placeholder="Mis. K3" hint="Awalan nomor laporan, mis. K3-20261117-0001." style="text-transform:uppercase" />
         </div>
         <x-input name="description" label="Deskripsi singkat" maxlength="255" placeholder="Contoh: Keselamatan kerja, APAR, P3K" />
         <div class="form-grid">

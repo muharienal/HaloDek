@@ -33,6 +33,15 @@ class AppServiceProvider extends ServiceProvider
 
             $view->with('unreadCount', UserNotification::where('user_id', $user->id)->where('is_read', false)->count());
             $view->with('recentNotifications', UserNotification::where('user_id', $user->id)->latest()->take(5)->get());
+            // Pengingat nomor WhatsApp: karyawan tanpa nomor melihatnya sekali tiap login.
+            $needsWa = $user->isKaryawan() && ! $user->waNumber();
+            $showWaPrompt = $needsWa && ! session()->has('wa_prompt_seen');
+            if ($showWaPrompt) {
+                session()->put('wa_prompt_seen', true);
+            }
+            $view->with('showWaPrompt', $showWaPrompt);
+            $view->with('needsWa', $needsWa);
+
             $view->with('pendingCount', $user->isAdmin()
                 ? Report::unassigned()->whereIn('team_id', $user->handledTeamIds() ?: [0])->count()
                 : 0);

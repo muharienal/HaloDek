@@ -35,6 +35,8 @@ class ReportActivity extends Model
             'transferred' => 'arrow-right',
             'comment' => 'chat',
             'cancelled' => 'x-circle',
+            'confirmed' => 'check-circle',
+            'reopened' => 'refresh',
             default => 'dot',
         };
     }

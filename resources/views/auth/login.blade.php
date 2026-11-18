@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Masuk — {{ config('halodek.name') }}</title>
+    <title>Masuk · {{ config('halodek.name') }}</title>
     @include('partials.head-icons')
     <link rel="stylesheet" href="{{ asset('css/halodek.css') }}?v={{ filemtime(public_path('css/halodek.css')) }}">
     <noscript><style>.auth-card [data-admin-only][hidden]{display:flex!important}.auth-tabs{display:none}</style></noscript>
@@ -12,16 +12,17 @@
 @php
     $mode = old('mode') === 'admin' || $errors->has('password') ? 'admin' : 'karyawan';
 @endphp
+<x-toasts :detail="true" />
 <div class="auth-bg">
     <aside class="auth-hero">
         <div class="auth-brand">
             <span class="co-tile"><img src="{{ asset('images/logo-pcs.png') }}" alt="{{ config('halodek.company') }}"></span>
             <span class="auth-sep"></span>
-            <span class="logo"><x-icon name="halodek" :size="30" /></span>
-            <span class="auth-name">{{ config('halodek.name') }}</span>
+            <img class="logo" src="{{ asset('images/halodek-icon.svg') }}" alt="">
+            <img class="auth-name" src="{{ asset('images/halodek-wordmark-white.svg') }}" alt="{{ config('halodek.name') }}">
         </div>
         <h1 class="auth-title">Satu pintu untuk semua kendala kerja Anda.</h1>
-        <p class="auth-desc">Layanan pengaduan dan pelaporan terpadu Bidang Umum dan IT. Sampaikan kendala Anda, pantau progresnya, sampai tuntas.</p>
+        <p class="auth-desc">Layanan pelaporan terpadu Bidang Umum dan IT. Sampaikan kendala Anda, pantau progresnya, sampai tuntas.</p>
     </aside>
 
     <main class="auth-panel">
@@ -33,8 +34,6 @@
                 <button type="button" class="auth-tab {{ $mode === 'karyawan' ? 'on' : '' }}" data-mode="karyawan" role="tab">Karyawan</button>
                 <button type="button" class="auth-tab {{ $mode === 'admin' ? 'on' : '' }}" data-mode="admin" role="tab">Admin</button>
             </div>
-
-            @if (session('warning'))<div class="alert alert-warning mt-4" style="margin-bottom:0">{{ session('warning') }}</div>@endif
 
             <form method="POST" action="{{ route('login') }}" id="login-form" class="auth-form" autocomplete="on">
                 @csrf
@@ -68,6 +67,7 @@
     </main>
 </div>
 
+<script src="{{ asset('js/halodek.js') }}?v={{ filemtime(public_path('js/halodek.js')) }}"></script>
 <script nonce="{{ $cspNonce ?? '' }}">
 (function () {
     var tabs = document.querySelectorAll('.auth-tab'),

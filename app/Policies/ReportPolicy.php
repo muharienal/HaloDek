@@ -67,6 +67,18 @@ class ReportPolicy
         return $this->owns($user, $report) && $report->status !== 'dibatalkan';
     }
 
+    /** Pelapor menjawab "sudah beres" (sekali saja). */
+    public function confirm(User $user, Report $report): bool
+    {
+        return $this->owns($user, $report) && $report->status === 'selesai' && $report->satisfied === null;
+    }
+
+    /** Pelapor membuka kembali laporan selesai yang ternyata belum beres (dibatasi beberapa hari). */
+    public function reopen(User $user, Report $report): bool
+    {
+        return $this->owns($user, $report) && $report->canStillReopen();
+    }
+
     public function cancel(User $user, Report $report): bool
     {
         return $this->owns($user, $report) && $report->status === 'menunggu';

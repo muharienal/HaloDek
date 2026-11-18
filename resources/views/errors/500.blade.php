@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>500 — Terjadi Kesalahan</title>
+    <title>Terjadi Kesalahan · {{ config('halodek.name') }}</title>
     @include('partials.head-icons')
-    <link rel="stylesheet" href="{{ asset('css/halodek.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/halodek.css') }}?v={{ filemtime(public_path('css/halodek.css')) }}">
 </head>
 <body>
 <div class="err-wrap">

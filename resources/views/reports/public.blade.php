@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow, noarchive">
-    <title>{{ $report->report_number }} — {{ config('halodek.name') }}</title>
+    <title>{{ $report->report_number }} · {{ config('halodek.name') }}</title>
     @include('partials.head-icons')
     <link rel="stylesheet" href="{{ asset('css/halodek.css') }}?v={{ filemtime(public_path('css/halodek.css')) }}">
 </head>
@@ -14,8 +14,8 @@
         <span class="lockup">
             <span class="co-tile"><img src="{{ asset('images/logo-pcs.png') }}" alt="{{ config('halodek.company') }}"></span>
             <span class="lockup-sep"></span>
-            <span class="lockup-mark"><x-icon name="halodek" :size="24" /></span>
-            <span class="lockup-name">{{ config('halodek.name') }}</span>
+            <img class="lockup-mark" src="{{ asset('images/halodek-icon.svg') }}" alt="">
+            <img class="lockup-name" src="{{ asset('images/halodek-wordmark.svg') }}" alt="{{ config('halodek.name') }}">
         </span>
     </div>
 </header>
@@ -75,7 +75,7 @@
                     <div><div class="text-xs muted">Kategori</div><div>{{ $report->categoryDisplayName() }}</div></div>
                     <div><div class="text-xs muted">Diajukan</div><div>{{ $report->created_at->translatedFormat('d M Y, H:i') }}</div></div>
                     <div><div class="text-xs muted">Penanggung jawab</div><div>@if ($report->assignee)<span class="strong">{{ $report->assignee->name }}</span> <span class="muted">· {{ $report->assignee->roleLabel() }}</span>@else<span class="badge tone-amber plain">Belum ditugaskan</span>@endif</div></div>
-                    @if ($report->resolved_at)<div><div class="text-xs muted">Selesai</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionHours() }} jam)</span></div></div>@endif
+                    @if ($report->resolved_at)<div><div class="text-xs muted">Selesai</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionHours() }} jam kerja)</span></div></div>@endif
                     @if ($report->location)<div><div class="text-xs muted">Lokasi</div><div>{{ $report->location->fullName() }}</div></div>@endif
                     @if ($report->item)<div><div class="text-xs muted">Inventaris terkait</div><div>{{ $report->item->label() }}</div></div>@endif
                 </div>
@@ -83,7 +83,7 @@
 
             @if ($report->follow_up_note || $results->isNotEmpty())
                 <div class="card" style="border-color: var(--primary)">
-                    <div class="card-head"><h2>Tindak Lanjut</h2></div>
+                    <div class="card-head"><h2>{{ ['selesai' => 'Hasil Penyelesaian', 'ditolak' => 'Alasan Penolakan'][$report->status] ?? 'Catatan Penanganan' }}</h2></div>
                     <div class="card-body">
                         @if ($report->follow_up_note)<p class="pre-line">{{ $report->follow_up_note }}</p>@endif
                         @if ($results->isNotEmpty())

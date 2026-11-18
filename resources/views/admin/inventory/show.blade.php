@@ -9,7 +9,7 @@
     <div class="card">
         <div class="card-head"><h2>Laporan Terkait</h2></div>
         @if ($reports->isEmpty())
-            <x-empty icon="clipboard" title="Belum ada laporan">Belum ada pengaduan yang menyebut item ini.</x-empty>
+            <x-empty icon="clipboard" title="Belum ada laporan">Belum ada laporan yang menyebut item ini.</x-empty>
         @else
             <div class="table-wrap"><table class="table">
                 <thead><tr><th>No. Laporan</th><th>Judul</th><th>Status</th><th>Tanggal</th></tr></thead>

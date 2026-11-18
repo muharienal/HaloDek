@@ -191,9 +191,9 @@ class TeamController extends Controller
     /** Rata-rata lama penyelesaian (jam) 90 hari terakhir. */
     private function avgHours(Team $team): ?float
     {
-        $rows = $team->reports()->whereNotNull('resolved_at')->where('resolved_at', '>=', now()->subDays(90))->get(['created_at', 'resolved_at']);
+        $avg = $team->reports()->whereNotNull('resolve_work_minutes')->where('resolved_at', '>=', now()->subDays(90))->avg('resolve_work_minutes');
 
-        return $rows->isEmpty() ? null : round($rows->avg(fn ($r) => $r->created_at->diffInMinutes($r->resolved_at) / 60), 1);
+        return $avg === null ? null : round((float) $avg / 60, 1);
     }
 
     private function validated(Request $request, ?Team $team = null): array

@@ -61,7 +61,7 @@
     <x-form-modal id="user-modal" create-title="Tambah Pengguna" edit-title="Ubah Pengguna" :action="route('admin.users.store')" size="lg">
         <div style="display:grid;gap:16px">
             <div class="form-grid"><x-input name="nik" label="NIK" required maxlength="50" /><x-input name="name" label="Nama lengkap" required maxlength="255" /></div>
-            <div class="form-grid"><x-input name="email" type="email" label="Email" maxlength="255" /><x-input name="phone" label="No. HP" maxlength="30" /></div>
+            <div class="form-grid"><x-input name="email" type="email" label="Email" maxlength="255" /><x-input name="phone" label="No. WhatsApp" maxlength="30" data-phone /></div>
             <div class="form-grid"><x-input name="department" label="Departemen" maxlength="100" /><x-input name="position" label="Jabatan" maxlength="100" /></div>
             <x-select name="role" label="Role" required id="user-role">
                 @foreach (config('halodek.roles') as $k => $label)<option value="{{ $k }}" @selected(old('role', 'karyawan') === $k)>{{ $label }}</option>@endforeach

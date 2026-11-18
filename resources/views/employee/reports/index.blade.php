@@ -1,12 +1,12 @@
 @extends('layouts.app')
 @section('title', 'Laporan Saya')
-@section('subtitle', 'Pantau status dan tindak lanjut laporan yang Anda ajukan')
+@section('subtitle', 'Pantau status dan penanganan laporan yang Anda ajukan')
 
 @section('content')
     <div class="card">
         <div class="card-head" style="flex-wrap:wrap">
             <div class="tabs">
-                @foreach (['semua' => 'Semua', 'aktif' => 'Aktif', 'menunggu' => 'Menunggu', 'diproses' => 'Diproses', 'selesai' => 'Selesai', 'ditolak' => 'Ditolak', 'dibatalkan' => 'Dibatalkan'] as $key => $label)
+                @foreach (['semua' => 'Semua', 'aktif' => 'Aktif', 'menunggu' => 'Menunggu', 'diproses' => 'Diproses', 'selesai' => 'Selesai', 'ditutup' => 'Ditolak / Batal'] as $key => $label)
                     <a class="tab {{ $status === $key ? 'active' : '' }}" href="{{ route('employee.reports.index', array_filter(['status' => $key, 'q' => $search, 'team_id' => $teamId])) }}">{{ $label }}</a>
                 @endforeach
             </div>
@@ -14,8 +14,14 @@
 
         <form method="GET" class="card-body filters" style="padding-bottom:0" data-autosubmit>
             <input type="hidden" name="status" value="{{ $status }}">
-            <div class="field grow"><label class="label" for="q">Cari</label>
-                <div class="input-icon"><x-icon name="search" :size="16" /><input class="input" id="q" name="q" value="{{ $search }}" placeholder="No. laporan atau judul…" data-no-auto></div></div>
+            @if ($search !== '')<input type="hidden" name="q" value="{{ $search }}">@endif
+            <div class="field"><span class="label">Cari</span>
+                @if ($search !== '')
+                    <a class="btn btn-secondary search-chip" href="{{ route('employee.reports.index', array_filter(['status' => $status, 'team_id' => $teamId])) }}" title="Hapus pencarian">“{{ \Illuminate\Support\Str::limit($search, 24) }}” <x-icon name="x" :size="14" /></a>
+                @else
+                    <button type="button" class="btn btn-secondary" data-search-open><x-icon name="search" :size="16" /> Cari</button>
+                @endif
+            </div>
             <div class="field"><label class="label" for="team_id">Regu</label>
                 <select class="select" id="team_id" name="team_id"><option value="">Semua regu</option>
                     @foreach ($teams as $t)<option value="{{ $t->id }}" @selected($teamId == $t->id)>{{ $t->name }}</option>@endforeach</select></div>

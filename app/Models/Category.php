@@ -12,7 +12,7 @@ class Category extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['team_id', 'name', 'allow_custom', 'is_active', 'sort_order'];
+    protected $fillable = ['team_id', 'name', 'keywords', 'hint', 'allow_custom', 'is_active', 'sort_order'];
 
     protected $casts = [
         'allow_custom' => 'boolean',

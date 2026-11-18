@@ -104,7 +104,7 @@ class WorkflowTest extends TestCase
         $this->assertSame('menunggu', $r2->status);
     }
 
-    public function test_finishing_needs_note_and_records_resolution_time_without_rating(): void
+    public function test_finishing_needs_note_and_records_resolution_time(): void
     {
         $r = $this->submit();
         $this->actingAs($this->staf)->post(route('admin.reports.take', $r));
@@ -114,7 +114,6 @@ class WorkflowTest extends TestCase
         $this->assertSame('selesai', $r->status);
         $this->assertNotNull($r->resolved_at);
         $this->assertDatabaseHas('user_notifications', ['user_id' => $this->head->id, 'report_id' => $r->id]);
-        $this->assertFalse(\Illuminate\Support\Facades\Route::has('employee.reports.rate'));
     }
 
     public function test_staf_of_other_team_cannot_see_or_touch_report(): void

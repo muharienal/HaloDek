@@ -9,13 +9,13 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\ReportService;
 use App\Support\Audit;
-use App\Support\Csv;
+use App\Support\Xlsx;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ReportController extends Controller
 {
@@ -43,7 +43,9 @@ class ReportController extends Controller
             ->whereIn('team_id', $user->handledTeamIds() ?: [0])
             ->orderBy('name')->get(['id', 'name']);
 
-        return view('admin.reports.index', compact('reports', 'filters', 'statusCounts', 'teams', 'staff'));
+        $overdueIds = $this->overdueIds($user);
+
+        return view('admin.reports.index', compact('reports', 'filters', 'statusCounts', 'teams', 'staff', 'overdueIds'));
     }
 
     public function show(Report $report): View
@@ -115,7 +117,93 @@ class ReportController extends Controller
 
         $this->reports->followUp($report, $request->user(), $data, $request->file('files', []));
 
-        return back()->with('success', 'Tindak lanjut berhasil disimpan.');
+        return back()->with('success', 'Perubahan disimpan.');
+    }
+
+    /** Tombol cepat "Selesaikan" / "Tolak": satu catatan wajib (+ foto hasil opsional). */
+    public function close(Request $request, Report $report): RedirectResponse
+    {
+        $this->authorize('manage', $report);
+        abort_unless($report->isOpen(), 422, 'Laporan ini sudah ditutup.');
+
+        $att = config('halodek.attachments');
+        $data = $request->validate([
+            'status' => ['required', Rule::in(['selesai', 'ditolak'])],
+            'close_note' => ['required', 'string', 'max:3000'],
+            'files' => ['nullable', 'array', 'max:'.$att['max_files']],
+            'files.*' => ['file', 'mimes:'.implode(',', $att['mimes']), 'max:'.$att['max_kb']],
+        ], [
+            'close_note.required' => $request->input('status') === 'ditolak'
+                ? 'Tuliskan alasan penolakan agar pelapor memahaminya.'
+                : 'Tuliskan hasil penyelesaian untuk pelapor.',
+        ]);
+
+        $this->reports->followUp($report, $request->user(), [
+            'status' => $data['status'],
+            'follow_up_note' => $data['close_note'],
+        ], $request->file('files', []));
+
+        return back()->with('success', $data['status'] === 'selesai' ? 'Laporan ditandai selesai. Pelapor sudah diberi tahu.' : 'Laporan ditolak. Pelapor sudah diberi tahu alasannya.');
+    }
+
+    /**
+     * Aksi massal dari daftar laporan: ambil, tugaskan, selesaikan, atau tolak sekaligus.
+     * Hak akses dicek per laporan; yang tidak berhak / sudah ditutup dilewati (bukan menggagalkan semuanya).
+     */
+    public function bulk(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:50'],
+            'ids.*' => ['integer'],
+            'action' => ['required', Rule::in(['ambil', 'tugaskan', 'selesai', 'ditolak'])],
+            'assigned_to_id' => ['nullable', 'required_if:action,tugaskan', 'integer'],
+            'bulk_note' => ['nullable', 'required_if:action,selesai,ditolak', 'string', 'max:3000'],
+        ], [
+            'ids.required' => 'Pilih minimal satu laporan.',
+            'ids.max' => 'Maksimal 50 laporan sekaligus.',
+            'assigned_to_id.required_if' => 'Pilih penanggung jawab.',
+            'bulk_note.required_if' => 'Tuliskan catatan untuk pelapor.',
+        ]);
+
+        $assignee = $data['action'] === 'tugaskan' ? User::active()->find($data['assigned_to_id']) : null;
+        if ($data['action'] === 'tugaskan' && ! $assignee) {
+            return back()->withErrors(['assigned_to_id' => 'Penanggung jawab tidak ditemukan atau tidak aktif.']);
+        }
+
+        $reports = Report::visibleTo($user)->whereIn('id', $data['ids'])->get();
+        $done = 0;
+        foreach ($reports as $report) {
+            $ok = match ($data['action']) {
+                'ambil' => $user->can('claim', $report) && ! $report->assigned_to_id,
+                'tugaskan' => $report->isOpen() && $user->can('assign', $report) && $this->canHandle($assignee, $report),
+                default => $report->isOpen() && $user->can('manage', $report),
+            };
+            if (! $ok) {
+                continue;
+            }
+
+            match ($data['action']) {
+                'ambil' => $this->reports->claim($report, $user),
+                'tugaskan' => $this->reports->followUp($report, $user, ['assigned_to_id' => $assignee->id]),
+                default => $this->reports->followUp($report, $user, ['status' => $data['action'], 'follow_up_note' => $data['bulk_note']]),
+            };
+            $done++;
+        }
+
+        $verb = ['ambil' => 'diambil', 'tugaskan' => 'ditugaskan ke '.($assignee->name ?? ''), 'selesai' => 'ditandai selesai', 'ditolak' => 'ditolak'][$data['action']];
+        $skipped = count(array_unique($data['ids'])) - $done;
+
+        if ($done === 0) {
+            return back()->with('error', 'Tidak ada laporan yang bisa diproses. Laporan yang dipilih sudah ditutup, sudah ada penanggung jawabnya, atau di luar wewenang Anda.');
+        }
+
+        return back()->with('success', "{$done} laporan {$verb}.".($skipped > 0 ? " {$skipped} dilewati karena sudah ditutup atau di luar wewenang Anda." : ''));
+    }
+
+    private function canHandle(User $assignee, Report $report): bool
+    {
+        return $assignee->isSuperadmin() || ($assignee->team_id === $report->team_id && in_array($assignee->role, User::TEAM_ROLES, true));
     }
 
     /** Ambil laporan: jadi penanggung jawab dan mulai diproses. */
@@ -136,7 +224,7 @@ class ReportController extends Controller
         $data = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
         $this->reports->release($report, $request->user(), $data['reason'] ?? null);
 
-        return back()->with('success', 'Tugas dilepas. Laporan kembali ke antrean regu.');
+        return back()->with('success', 'Laporan dilepas dan kembali menunggu diambil.');
     }
 
     public function transfer(Request $request, Report $report): RedirectResponse
@@ -210,39 +298,63 @@ class ReportController extends Controller
         return view('admin.reports.print', compact('report', 'activities'));
     }
 
-    public function export(Request $request): StreamedResponse
+    public function export(Request $request): BinaryFileResponse
     {
         $query = $this->query($request)->with(['team', 'category', 'assignee', 'location', 'item'])->latest();
 
-        $rows = (function () use ($query) {
-            foreach ($query->cursor() as $r) {
-                yield [
-                    $r->report_number,
-                    $r->created_at->format('Y-m-d H:i'),
-                    $r->team->name ?? '',
-                    $r->categoryDisplayName(),
-                    $r->title,
-                    $r->reporter_name,
-                    $r->location->name ?? '',
-                    $r->item->code ?? '',
-                    $r->priorityLabel(),
-                    $r->statusLabel(),
-                    $r->assignee->name ?? '',
-                    $r->first_response_at?->format('Y-m-d H:i'),
-                    $r->resolved_at?->format('Y-m-d H:i'),
-                    $r->resolutionHours(),
-                    $r->follow_up_note,
-                ];
-            }
-        })();
-
-        return Csv::download('laporan-halodek-'.now()->format('Ymd-His').'.csv', [
+        $rows = [array_map(fn ($h) => ['v' => $h, 's' => 'head'], [
             'No. Laporan', 'Dibuat', 'Regu', 'Kategori', 'Judul', 'Pelapor', 'Lokasi', 'Kode Inventaris',
-            'Prioritas', 'Status', 'Penanggung Jawab', 'Respons Pertama', 'Selesai', 'Durasi (jam)', 'Catatan Tindak Lanjut',
-        ], $rows);
+            'Prioritas', 'Status', 'Penanggung Jawab', 'Respons Pertama', 'Selesai', 'Durasi (jam kerja)', 'Dibuka Ulang', 'Catatan Penanganan',
+        ])];
+        foreach ($query->cursor() as $r) {
+            $rows[] = [
+                $r->report_number,
+                $r->created_at->format('Y-m-d H:i'),
+                $r->team->name ?? '',
+                $r->categoryDisplayName(),
+                $r->title,
+                $r->reporter_name,
+                $r->location->name ?? '',
+                $r->item->code ?? '',
+                $r->priorityLabel(),
+                $r->statusLabel(),
+                $r->assignee->name ?? '',
+                $r->first_response_at?->format('Y-m-d H:i') ?? '',
+                $r->resolved_at?->format('Y-m-d H:i') ?? '',
+                ($h = $r->resolutionHours()) !== null ? ['v' => $h, 's' => 'dec'] : '',
+                $r->reopened_count ? ['v' => $r->reopened_count, 's' => 'int'] : '',
+                (string) $r->follow_up_note,
+            ];
+        }
+
+        $path = Xlsx::build([[
+            'name' => 'Laporan',
+            'widths' => [20, 17, 18, 24, 40, 22, 20, 16, 11, 12, 22, 17, 17, 12, 12, 50],
+            'rows' => $rows,
+        ]]);
+
+        return response()->download($path, 'laporan-halodek-'.now()->format('Ymd-His').'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     // ------------------------------------------------------------------ util
+
+    /**
+     * ID laporan lewat batas respons yang boleh dilihat pengguna. Hanya laporan di antrean
+     * (belum ada penanggung jawab) yang dicek, jadi jumlahnya kecil.
+     *
+     * @return array<int,int>
+     */
+    private function overdueIds($user): array
+    {
+        return $this->overdueCache ??= Report::query()->visibleTo($user)->unassigned()
+            ->get(['id', 'created_at', 'priority', 'status', 'assigned_to_id'])
+            ->filter->isOverdue()->pluck('id')->all();
+    }
+
+    /** @var array<int,int>|null */
+    private ?array $overdueCache = null;
 
     /** @return array<string, mixed> */
     private function filters(Request $request): array
@@ -255,6 +367,7 @@ class ReportController extends Controller
             'q' => trim((string) $request->query('q')),
             'from' => $request->query('from'),
             'to' => $request->query('to'),
+            'lewat' => $request->boolean('lewat'),
         ];
     }
 
@@ -274,6 +387,7 @@ class ReportController extends Controller
             ->when(is_numeric($f['assigned']), fn ($q) => $q->where('assigned_to_id', (int) $f['assigned']))
             ->when($f['from'], fn ($q) => $q->whereDate('created_at', '>=', $f['from']))
             ->when($f['to'], fn ($q) => $q->whereDate('created_at', '<=', $f['to']))
+            ->when($f['lewat'], fn ($q) => $q->whereIn('id', $this->overdueIds($user) ?: [0]))
             ->when($f['q'] !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('report_number', 'like', "%{$f['q']}%")
                 ->orWhere('reporter_name', 'like', "%{$f['q']}%")

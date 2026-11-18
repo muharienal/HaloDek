@@ -122,8 +122,11 @@ class ReportService
             // --- penugasan
             if (array_key_exists('assigned_to_id', $data) && (int) $data['assigned_to_id'] !== (int) $report->assigned_to_id) {
                 $report->assigned_to_id = $data['assigned_to_id'] ?: null;
+                if (! $report->assigned_to_id) {
+                    $report->reminded_at = null;
+                }
                 $assignee = $report->assigned_to_id ? User::find($report->assigned_to_id) : null;
-                $this->log($report, $actor, 'assigned', $assignee ? "Ditugaskan kepada {$assignee->name}." : 'Penugasan dilepas.');
+                $this->log($report, $actor, 'assigned', $assignee ? "Penanggung jawab: {$assignee->name}." : 'Penanggung jawab dilepas, laporan kembali menunggu diambil.');
                 if ($assignee && $assignee->id !== $actor->id) {
                     $this->notify->toUser($assignee, 'Tugas baru '.$report->report_number, "Anda ditugaskan menangani: \"{$report->title}\".", $report);
                 }
@@ -143,6 +146,7 @@ class ReportService
 
                 if ($report->status === 'selesai') {
                     $report->resolved_at = $now;
+                    $report->satisfied = null; // pelapor ditanya lagi "sudah beres?"
                 } elseif (in_array($report->status, Report::OPEN_STATUSES, true)) {
                     $report->resolved_at = null; // dibuka kembali
                 }
@@ -179,6 +183,7 @@ class ReportService
                     "Laporan \"{$report->title}\" kini berstatus {$report->statusLabel()}.".($note !== '' ? " Catatan: {$note}" : ''),
                     $report,
                 );
+                app(WhatsAppNotifier::class)->reporterUpdate($report);
             }
         });
 
@@ -199,6 +204,7 @@ class ReportService
             $report->inventory_item_id = null; // item inventaris milik regu lama
             $report->status = 'menunggu';
             $report->resolved_at = null;
+            $report->reminded_at = null;
             $report->save();
 
             $this->log($report, $actor, 'transferred', "Laporan dipindahkan dari {$from->name} ke {$to->name}.".($reason ? " Alasan: {$reason}" : ''));
@@ -267,6 +273,50 @@ class ReportService
         return $report;
     }
 
+    // ------------------------------------------- konfirmasi pelapor setelah selesai
+
+    /** Pelapor menyatakan masalah sudah beres. */
+    public function confirm(Report $report, User $actor): Report
+    {
+        DB::transaction(function () use ($report, $actor) {
+            $report->forceFill(['satisfied' => true])->save();
+            $this->log($report, $actor, 'confirmed', 'Pelapor menyatakan masalah sudah beres.');
+        });
+
+        if ($report->assigned_to_id && $report->assigned_to_id !== $actor->id) {
+            $this->notify->toUser($report->assigned_to_id, 'Laporan dikonfirmasi beres '.$report->report_number, "{$actor->name} menyatakan \"{$report->title}\" sudah beres.", $report);
+        }
+
+        return $report;
+    }
+
+    /** Pelapor membuka kembali laporan selesai: kembali ke penanggung jawab (atau antrean regu). */
+    public function reopen(Report $report, User $actor, string $reason): Report
+    {
+        DB::transaction(function () use ($report, $actor, $reason) {
+            $report->forceFill([
+                'status' => $report->assigned_to_id ? 'diproses' : 'menunggu',
+                'resolved_at' => null,
+                'follow_up_note' => null, // catatan penyelesaian lama tidak lagi berlaku (tetap tercatat di riwayat)
+                'satisfied' => false,
+                'reopened_count' => $report->reopened_count + 1,
+                'reminded_at' => null,
+            ])->save();
+            $this->log($report, $actor, 'reopened', 'Laporan dibuka kembali oleh pelapor karena belum beres.', ['note' => $reason]);
+        });
+
+        $title = 'Laporan dibuka kembali '.$report->report_number;
+        $body = "{$actor->name}: \"".str($reason)->limit(120).'"';
+        if ($report->assigned_to_id) {
+            $this->notify->toUser($report->assigned_to_id, $title, $body, $report);
+            $this->notify->toHead($report->team, $title, $body, $report, [$actor->id, $report->assigned_to_id]);
+        } else {
+            $this->notify->toTeam($report->team, $title, $body, $report, [$actor->id]);
+        }
+
+        return $report->refresh();
+    }
+
     // ------------------------------------------------- ambil / lepas tugas
 
     /** Petugas mengambil laporan untuk dikerjakan sendiri (status otomatis "diproses"). */
@@ -288,6 +338,7 @@ class ReportService
 
         if ($report->user_id && $report->user_id !== $actor->id) {
             $this->notify->toUser($report->user_id, 'Laporan diproses '.$report->report_number, "Laporan \"{$report->title}\" sedang ditangani {$actor->name}.", $report);
+            app(WhatsAppNotifier::class)->reporterUpdate($report->refresh());
         }
 
         return $report->refresh();
@@ -299,17 +350,18 @@ class ReportService
         DB::transaction(function () use ($report, $actor, $reason) {
             $previous = $report->assignee;
             $report->assigned_to_id = null;
+            $report->reminded_at = null; // kembali ke antrean: boleh diingatkan lagi bila lewat batas
             if ($report->status === 'diproses') {
                 $report->status = 'menunggu';
             }
             $report->save();
 
-            $who = $previous && $previous->id !== $actor->id ? "Penugasan {$previous->name} dilepas oleh {$actor->name}." : "{$actor->name} melepas tugas ini kembali ke antrean regu.";
+            $who = $previous && $previous->id !== $actor->id ? "{$actor->name} melepas {$previous->name} sebagai penanggung jawab." : "{$actor->name} melepas laporan ini, kembali menunggu diambil.";
             $this->log($report, $actor, 'released', $who.($reason ? " Alasan: {$reason}" : ''));
         });
 
         if ($actor->isStaf()) {
-            $this->notify->toHead($report->team, 'Tugas dilepas '.$report->report_number, "{$actor->name} melepas \"{$report->title}\" ke antrean.", $report, [$actor->id]);
+            $this->notify->toHead($report->team, 'Tugas dilepas '.$report->report_number, "{$actor->name} melepas \"{$report->title}\", kembali menunggu diambil.", $report, [$actor->id]);
         }
 
         return $report->refresh();

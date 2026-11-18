@@ -1,18 +1,10 @@
-@if (session('success'))
-    <div class="alert alert-success" data-autohide role="status"><x-icon name="check-circle" :size="18" /><div>{{ session('success') }}</div><button class="close" type="button" aria-label="Tutup">&times;</button></div>
-@endif
+<x-toasts />
 @if (session('tempPassword'))
     @php $tp = session('tempPassword'); @endphp
     <div class="alert alert-warning" role="alert"><x-icon name="key" :size="18" /><div>
         <strong>Password sementara untuk {{ $tp['name'] }} (NIK {{ $tp['nik'] }}):</strong>
         <div class="mono" style="font-size:18px;margin:6px 0;user-select:all">{{ $tp['password'] }}</div>
         <span class="text-sm">Catat dan sampaikan secara langsung sekarang — password ini tidak akan ditampilkan lagi. Pengguna wajib menggantinya saat login pertama.</span></div></div>
-@endif
-@if (session('error'))
-    <div class="alert alert-error" role="alert"><x-icon name="alert" :size="18" /><div>{{ session('error') }}</div><button class="close" type="button" aria-label="Tutup">&times;</button></div>
-@endif
-@if (session('warning'))
-    <div class="alert alert-warning" role="alert"><x-icon name="alert" :size="18" /><div>{{ session('warning') }}</div><button class="close" type="button" aria-label="Tutup">&times;</button></div>
 @endif
 @if (session('importErrors'))
     <div class="alert alert-warning"><div><strong>Baris yang dilewati:</strong>

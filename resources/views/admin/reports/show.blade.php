@@ -4,19 +4,31 @@
 
 @section('content')
 @php $me = auth()->user(); @endphp
-<div class="flex items-center justify-between wrap gap-3 mb-4">
-    <a href="{{ route('admin.reports.index') }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Semua laporan</a>
-    <div class="flex gap-2 wrap items-center">
+<div class="detail-bar mb-4">
+    <div class="detail-top">
+        <a href="{{ route('admin.reports.index') }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Semua laporan</a>
+        <a class="btn btn-secondary btn-sm detail-print" href="{{ route('admin.reports.print', $report) }}" target="_blank" title="Cetak"><x-icon name="print" :size="16" /> <span>Cetak</span></a>
+    </div>
+    <div class="detail-badges">
         <x-badge :tone="$report->statusTone()">{{ $report->statusLabel() }}</x-badge>
         <x-badge :tone="$report->priorityTone()" plain>Prioritas {{ $report->priorityLabel() }}</x-badge>
-        <a class="btn btn-secondary btn-sm" href="{{ route('admin.reports.print', $report) }}" target="_blank"><x-icon name="print" :size="16" /> Cetak</a>
-        @can('claim', $report)
-            <form method="POST" action="{{ route('admin.reports.take', $report) }}">@csrf<button class="btn btn-primary btn-sm">{{ $report->assigned_to_id ? 'Ambil Alih' : 'Ambil Laporan' }}</button></form>
-        @endcan
-        @can('release', $report)
-            <form method="POST" action="{{ route('admin.reports.release', $report) }}" data-confirm="Lepas tugas ini? Laporan kembali ke antrean regu." data-confirm-title="Lepas tugas" data-confirm-ok="Lepas">@csrf<button class="btn btn-secondary btn-sm">Lepas Tugas</button></form>
-        @endcan
+        @if ($report->reopened_count)<x-badge tone="orange" plain>Dibuka ulang {{ $report->reopened_count }}×</x-badge>@endif
     </div>
+    @php $canClose = $report->isOpen() && $me->can('manage', $report); @endphp
+    @if ($me->can('claim', $report) || $canClose || $me->can('release', $report))
+        <div class="detail-actions">
+            @can('claim', $report)
+                <form method="POST" action="{{ route('admin.reports.take', $report) }}">@csrf<button class="btn btn-primary btn-sm"><x-icon name="user" :size="16" /> {{ $report->assigned_to_id ? 'Ambil Alih' : 'Ambil Laporan' }}</button></form>
+            @endcan
+            @if ($canClose)
+                <button type="button" class="btn btn-success btn-sm" data-modal-open="close-selesai"><x-icon name="check-circle" :size="16" /> Selesaikan</button>
+                <button type="button" class="btn btn-soft-danger btn-sm" data-modal-open="close-ditolak"><x-icon name="x-circle" :size="16" /> Tolak</button>
+            @endif
+            @can('release', $report)
+                <form method="POST" action="{{ route('admin.reports.release', $report) }}" data-confirm="Lepas laporan ini? Laporan kembali menunggu diambil anggota regu." data-confirm-title="Lepas laporan" data-confirm-ok="Lepas">@csrf<button class="btn btn-secondary btn-sm">Lepas</button></form>
+            @endcan
+        </div>
+    @endif
 </div>
 
 <div class="grid cols-main-r" style="align-items:start">
@@ -24,10 +36,17 @@
         <div class="card">
             <div class="card-head"><h2>{{ $report->title }}</h2><x-team-chip :team="$report->team" /></div>
             <div class="card-body">
-                <div class="flex gap-3 items-center mb-3">
+                @php
+                    $waNo = $report->user?->waNumber();
+                    $waText = 'Halo '.\Illuminate\Support\Str::words($report->reporter_name, 1, '').', saya '.$me->name.' dari Regu '.$report->team->name.' (HaloDek), terkait laporan '.$report->report_number.' "'.$report->title.'".';
+                @endphp
+                <div class="flex gap-3 items-center wrap mb-3">
                     <span class="avatar">{{ $report->user?->initials() ?? '?' }}</span>
-                    <div><div class="strong">{{ $report->reporter_name }}</div>
-                        <div class="text-xs muted">{{ $report->user ? 'NIK '.$report->user->nik.($report->user->department ? ' · '.$report->user->department : '').($report->user->phone ? ' · '.$report->user->phone : '') : 'Akun pelapor sudah dihapus' }}</div></div>
+                    <div class="grow" style="min-width:0"><div class="strong">{{ $report->reporter_name }}</div>
+                        <div class="text-xs muted">{{ $report->user ? 'NIK '.$report->user->nik.($report->user->department ? ' · '.$report->user->department : '').($waNo ? ' · '.\App\Support\Phone::pretty($waNo) : '') : 'Akun pelapor sudah dihapus' }}</div></div>
+                    @if ($waNo)
+                        <a class="btn btn-wa btn-sm" href="https://wa.me/{{ $waNo }}?text={{ rawurlencode($waText) }}" target="_blank" rel="noopener noreferrer"><x-icon name="chat" :size="15" /> Hubungi via WA</a>
+                    @endif
                 </div>
                 <p class="pre-line">{{ $report->description }}</p>
                 @if ($report->attachments->isNotEmpty())
@@ -63,45 +82,49 @@
             <div class="alert alert-info" style="margin:0"><x-icon name="x-circle" :size="18" /><div>Laporan ini dibatalkan oleh pelapor sehingga tidak dapat ditindaklanjuti.</div></div>
         @elseif (! $me->can('manage', $report))
             <div class="card" style="border-color: var(--primary)">
-                <div class="card-head"><h2>Tindak Lanjut</h2></div>
+                <div class="card-head"><h2>Penanganan</h2></div>
                 <div class="card-body" style="display:grid;gap:12px">
                     @if ($report->assignee)
                         <p class="text-sm">Laporan ini ditangani <strong>{{ $report->assignee->name }}</strong>. Hanya penanggung jawab dan Kepala Regu yang dapat mengubah statusnya.</p>
                     @else
-                        <p class="text-sm">Laporan ini masih di antrean regu. Ambil laporan untuk mulai mengerjakannya.</p>
+                        <p class="text-sm">Laporan ini menunggu diambil. Tekan <strong>Ambil Laporan</strong> di atas untuk mulai mengerjakannya.</p>
                     @endif
-                    @can('claim', $report)
-                        <form method="POST" action="{{ route('admin.reports.take', $report) }}">@csrf<button class="btn btn-primary btn-block">Ambil Laporan</button></form>
-                    @endcan
                 </div>
             </div>
         @else
-        <div class="card" style="border-color: var(--primary)">
-            <div class="card-head"><h2>Tindak Lanjut</h2></div>
+        @php $canAssign = $me->can('assign', $report); $manualOpen = $errors->hasAny(['status', 'follow_up_note', 'files.*']); @endphp
+        <div class="card">
             <form method="POST" action="{{ route('admin.reports.update', $report) }}" enctype="multipart/form-data" class="card-body" style="display:grid;gap:14px">
                 @csrf @method('PATCH')
-                @can('assign', $report)
-                    <x-select name="assigned_to_id" label="Ditugaskan kepada" hint="Kosongkan agar laporan tetap di antrean regu (staf dapat mengambil sendiri).">
-                        <option value="">— Belum ditugaskan —</option>
+                @if ($canAssign)
+                    <h2 style="margin:0;font-size:15.5px">Penugasan</h2>
+                    <x-select name="assigned_to_id" label="Penanggung jawab" hint="Kosongkan agar laporan menunggu diambil (staf dapat mengambil sendiri).">
+                        <option value="">— Belum ada —</option>
                         @foreach ($staff as $s)<option value="{{ $s->id }}" @selected(old('assigned_to_id', $report->assigned_to_id) == $s->id)>{{ $s->name }} — {{ $s->id === $me->id ? 'saya, ' : '' }}{{ config('halodek.roles.'.$s->role) }}</option>@endforeach
                     </x-select>
                     <x-select name="priority" label="Prioritas" required>
-                        @foreach (config('halodek.priorities') as $k => $p)<option value="{{ $k }}" @selected(old('priority', $report->priority) === $k)>{{ $p['label'] }}</option>@endforeach
+                        @foreach (config('halodek.priorities') as $k => $p)<option value="{{ $k }}" @selected(old('priority', $report->priority) === $k)>{{ $p['label'] }} — {{ $p['hint'] }}</option>@endforeach
                     </x-select>
-                @endcan
-                <x-select name="status" label="Status" required>
-                    @foreach (['menunggu', 'diproses', 'selesai', 'ditolak'] as $s)
-                        <option value="{{ $s }}" @selected(old('status', $report->status) === $s)>{{ config("halodek.statuses.$s.label") }}</option>
-                    @endforeach
-                </x-select>
-                <x-textarea name="follow_up_note" label="Catatan tindak lanjut" rows="4" maxlength="3000" counter :value="old('follow_up_note')" />
-                <div class="field">
-                    <span class="label">Foto hasil pekerjaan (opsional)</span>
-                    <input type="file" class="input" name="files[]" multiple accept="image/jpeg,image/png,image/webp" data-file-input data-max-files="{{ config('halodek.attachments.max_files') }}" data-max-kb="{{ config('halodek.attachments.max_kb') }}" data-file-error="u-err">
-                    <p class="error" id="u-err" hidden></p>
-                    @error('files.*')<span class="error">{{ $message }}</span>@enderror
-                </div>
-                <button class="btn btn-primary"><x-icon name="save" :size="16" /> Simpan Tindak Lanjut</button>
+                @endif
+                <details class="more" @if ($manualOpen || ! $report->isOpen()) open @endif>
+                    <summary>{{ $report->isOpen() ? 'Ubah status manual' : 'Ubah status' }}</summary>
+                    <div style="display:grid;gap:14px">
+                        @if ($report->isOpen())<p class="hint" style="margin:0">Untuk menyelesaikan atau menolak, cukup pakai tombol <strong>Selesaikan</strong> / <strong>Tolak</strong> di atas.</p>@endif
+                        <x-select name="status" label="Status" required>
+                            @foreach (['menunggu', 'diproses', 'selesai', 'ditolak'] as $s)
+                                <option value="{{ $s }}" @selected(old('status', $report->status) === $s)>{{ config("halodek.statuses.$s.label") }}</option>
+                            @endforeach
+                        </x-select>
+                        <x-textarea name="follow_up_note" label="Catatan untuk pelapor" rows="3" maxlength="3000" counter :value="old('follow_up_note')" hint="Wajib saat mengubah ke Selesai atau Ditolak." />
+                        <div class="field">
+                            <span class="label">Foto hasil pekerjaan (opsional)</span>
+                            <input type="file" class="input" name="files[]" multiple accept="image/jpeg,image/png,image/webp" data-file-input data-max-files="{{ config('halodek.attachments.max_files') }}" data-max-kb="{{ config('halodek.attachments.max_kb') }}" data-file-error="u-err">
+                            <p class="error" id="u-err" hidden></p>
+                            @error('files.*')<span class="error">{{ $message }}</span>@enderror
+                        </div>
+                    </div>
+                </details>
+                <button class="btn btn-primary"><x-icon name="save" :size="16" /> Simpan Perubahan</button>
             </form>
         </div>
         @endif
@@ -111,9 +134,16 @@
             <div class="card-body" style="display:grid;gap:14px">
                 <div><div class="text-xs muted">Kategori</div><div>{{ $report->categoryDisplayName() }}</div></div>
                 <div><div class="text-xs muted">Diajukan</div><div>{{ $report->created_at->translatedFormat('d M Y, H:i') }}</div></div>
-                <div><div class="text-xs muted">Penanggung jawab</div><div>@if ($report->assignee)<span class="strong">{{ $report->assignee->name }}</span> <span class="muted">· {{ $report->assignee->roleLabel() }}</span>@else<span class="badge tone-amber plain">Belum ditugaskan (antrean regu)</span>@endif</div></div>
+                <div><div class="text-xs muted">Penanggung jawab</div><div>@if ($report->assignee)<span class="strong">{{ $report->assignee->name }}</span> <span class="muted">· {{ $report->assignee->roleLabel() }}</span>@else<span class="badge tone-amber plain">Belum ada (menunggu diambil)</span>@endif</div></div>
+                @if ($report->isOpen() && ! $report->assigned_to_id)
+                    @php $deadline = $report->responseDeadline(); @endphp
+                    <div><div class="text-xs muted">Batas respons</div><div>{{ $deadline->translatedFormat('d M Y, H:i') }}
+                        @if ($report->isOverdue())<span class="badge tone-red plain overdue-badge">Lewat batas</span>@endif</div>
+                        <div class="text-xs faint">{{ config('halodek.response_sla.'.$report->priority) }} jam kerja untuk prioritas {{ $report->priorityLabel() }}</div></div>
+                @endif
                 <div><div class="text-xs muted">Respons pertama</div><div>{{ $report->first_response_at ? $report->first_response_at->translatedFormat('d M Y, H:i').' ('.$report->created_at->diffForHumans($report->first_response_at, true).')' : 'Belum ada respons' }}</div></div>
-                @if ($report->resolved_at)<div><div class="text-xs muted">Selesai</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionHours() }} jam)</span></div></div>@endif
+                @if ($report->resolved_at)<div><div class="text-xs muted">Selesai</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionHours() }} jam kerja)</span></div></div>@endif
+                @if ($report->status === 'selesai')<div><div class="text-xs muted">Konfirmasi pelapor</div><div>{{ $report->satisfied ? 'Sudah beres' : 'Belum dijawab' }}</div></div>@endif
                 @if ($report->location)<div><div class="text-xs muted">Lokasi</div><div>{{ $report->location->fullName() }}</div></div>@endif
                 @if ($report->item)<div><div class="text-xs muted">Inventaris terkait</div><a href="{{ route('admin.inventory.items.show', $report->item) }}">{{ $report->item->label() }}</a></div>@endif
             </div>
@@ -146,6 +176,32 @@
 @endsection
 
 @push('modals')
+    @if ($report->isOpen() && auth()->user()->can('manage', $report))
+        @foreach (['selesai' => ['Selesaikan Laporan', 'Hasil penyelesaian', 'Mis. RAM sudah diganti, laptop normal kembali.', 'Tandai Selesai', 'btn-success'], 'ditolak' => ['Tolak Laporan', 'Alasan penolakan', 'Mis. Permintaan ini ditangani langsung oleh atasan masing-masing.', 'Tolak Laporan', 'btn-danger']] as $st => [$ttl, $lbl, $ph, $btn, $cls])
+            <div class="modal" id="close-{{ $st }}" role="dialog" aria-modal="true" aria-labelledby="close-{{ $st }}-title">
+                <div class="modal-dialog sm">
+                    <form method="POST" action="{{ route('admin.reports.close', $report) }}" enctype="multipart/form-data">
+                        @csrf
+                        <input type="hidden" name="_modal" value="close-{{ $st }}">
+                        <input type="hidden" name="status" value="{{ $st }}">
+                        <div class="modal-head"><h3 id="close-{{ $st }}-title">{{ $ttl }}</h3><button type="button" class="btn btn-ghost btn-icon" data-modal-close aria-label="Tutup"><x-icon name="x" :size="18" /></button></div>
+                        <div class="modal-body" style="display:grid;gap:14px">
+                            <p class="muted text-sm" style="margin:0">Catatan ini dikirim ke <strong>{{ $report->reporter_name }}</strong>{{ $report->user?->waNumber() ? ' (juga lewat WhatsApp)' : '' }}.</p>
+                            <x-textarea name="close_note" id="close-note-{{ $st }}" :label="$lbl" rows="4" maxlength="3000" required :placeholder="$ph" :value="old('status') === $st ? old('close_note') : null" />
+                            @if ($st === 'selesai')
+                                <div class="field">
+                                    <span class="label">Foto hasil pekerjaan (opsional)</span>
+                                    <input type="file" class="input" name="files[]" multiple accept="image/jpeg,image/png,image/webp" data-file-input data-max-files="{{ config('halodek.attachments.max_files') }}" data-max-kb="{{ config('halodek.attachments.max_kb') }}" data-file-error="cs-err">
+                                    <p class="error" id="cs-err" hidden></p>
+                                </div>
+                            @endif
+                        </div>
+                        <div class="modal-foot"><button type="button" class="btn btn-secondary" data-modal-close>Batal</button><button class="btn {{ $cls }}">{{ $btn }}</button></div>
+                    </form>
+                </div>
+            </div>
+        @endforeach
+    @endif
     @if ($otherTeams->isNotEmpty() && auth()->user()->can('assign', $report))
         <x-form-modal id="transfer-modal" create-title="Alihkan Laporan" :action="route('admin.reports.transfer', $report)" submit="Alihkan">
             @php $map = $otherTeams->mapWithKeys(fn ($t) => [$t->id => $t->categories->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values()]); @endphp

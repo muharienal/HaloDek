@@ -63,6 +63,7 @@
         'swap' => '<path d="M5 8h13l-3.5-3.5M19 16H6l3.5 3.5" />',
         'power' => '<path d="M12 3.5v8" /><path d="M7 6.5a7.5 7.5 0 1 0 10 0" />',
         'laptop' => '<rect x="5" y="5.5" width="14" height="10" rx="1.2" /><path d="M3 18.5h18" />',
+        'chart' => '<path d="M4.5 19.5h15" /><path d="M7.5 16.5v-5M12 16.5v-9M16.5 16.5v-6.5" />',
         'list' => '<path d="M8.5 6.5H20M8.5 12H20M8.5 17.5H20M4 6.5h.01M4 12h.01M4 17.5h.01" />',
     ];
     $svg = $paths[$name] ?? $paths['dot'];

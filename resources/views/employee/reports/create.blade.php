@@ -10,7 +10,15 @@
     {{-- ===== LANGKAH 1: PILIH REGU ===== --}}
     <div class="card">
         <div class="card-body">
-            <div class="step"><span class="n">1</span> Pilih regu tujuan</div>
+            <div class="step"><span class="n">1</span> Apa masalahnya?</div>
+            @if ($teams->isNotEmpty())
+                <div class="cat-search">
+                    <label class="sr-only" for="cat-q">Cari jenis masalah</label>
+                    <div class="input-icon"><x-icon name="search" :size="16" /><input class="input" id="cat-q" type="search" autocomplete="off" maxlength="60" placeholder="Ketik masalahnya, mis. wifi, AC, printer, kunci"></div>
+                    <div class="cat-results" id="cat-results" hidden></div>
+                </div>
+                <div class="or-line">atau pilih regu</div>
+            @endif
             @if ($teams->isEmpty())
                 <x-empty icon="inbox" title="Belum ada regu aktif">Hubungi Superadmin untuk mengaktifkan regu penerima laporan.</x-empty>
             @else
@@ -53,14 +61,18 @@
 
             <div class="field">
                 <span class="label">Tingkat urgensi <span class="req">*</span></span>
-                <div class="flex gap-2 wrap">
+                <div class="choice-grid prio">
                     @foreach (config('halodek.priorities') as $key => $p)
-                        <label class="tab" style="cursor:pointer">
-                            <input type="radio" name="priority" value="{{ $key }}" class="sr-only" @checked(old('priority', 'sedang') === $key)>
-                            <span class="badge plain tone-{{ $p['tone'] }}">{{ $p['label'] }}</span>
+                        <label class="choice">
+                            <input type="radio" name="priority" value="{{ $key }}" @checked(old('priority', 'sedang') === $key)>
+                            <span class="choice-box">
+                                <span class="strong"><span class="pdot tone-{{ $p['tone'] }}"></span>{{ $p['label'] }}</span>
+                                <span class="text-xs muted">{{ $p['hint'] }}</span>
+                            </span>
                         </label>
                     @endforeach
                 </div>
+                @error('priority')<span class="error">{{ $message }}</span>@enderror
             </div>
 
             <div class="form-grid">
@@ -79,13 +91,16 @@
                 </div>
             </div>
 
+            <div class="alert alert-warning similar-box" id="similar" hidden role="status" aria-live="polite"></div>
+
             <div class="field">
-                <label class="label" for="title">Judul <span class="req">*</span></label>
-                <input class="input {{ $errors->has('title') ? 'is-invalid' : '' }}" name="title" id="title" maxlength="200" required value="{{ old('title') }}" placeholder="Ringkas dan jelas, mis. Laptop sering hang saat membuka Excel">
+                <label class="label" for="title">Judul <span class="muted" style="font-weight:400">(opsional)</span></label>
+                <input class="input {{ $errors->has('title') ? 'is-invalid' : '' }}" name="title" id="title" maxlength="200" value="{{ old('title') }}" placeholder="Kosongkan untuk judul otomatis">
+                <span class="hint" id="title-hint">Jika dikosongkan, judul dibuat otomatis dari kategori dan lokasi.</span>
                 @error('title')<span class="error">{{ $message }}</span>@enderror
             </div>
 
-            <x-textarea name="description" label="Deskripsi" required maxlength="3000" rows="6" counter placeholder="Ceritakan secara rinci…" />
+            <x-textarea name="description" label="Deskripsi" required maxlength="3000" rows="6" counter placeholder="Ceritakan masalahnya: apa yang terjadi, di mana, dan sejak kapan." />
 
             <div class="field">
                 <span class="label">Lampiran (opsional)</span>
@@ -116,6 +131,7 @@
     var oldCat = @json(old('category_id'));
     var oldAsset = @json(old('inventory_item_id'));
     var assetsUrl = @json(route('employee.reports.items'));
+    var similarUrl = @json(route('employee.reports.similar'));
 
     var form = document.getElementById('report-form');
     var card = document.getElementById('detail-card');
@@ -126,6 +142,11 @@
     var assetWrap = document.getElementById('asset-wrap');
     var asset = document.getElementById('inventory_item_id');
     var current = {};
+    var title = document.getElementById('title');
+    var titleHint = document.getElementById('title-hint');
+    var desc = document.getElementById('description');
+    var defaultDesc = desc ? desc.getAttribute('placeholder') : '';
+    var teamsInfo = @json($teams->mapWithKeys(fn ($t) => [$t->id => ['name' => $t->name, 'color' => $t->hex()]]));
 
     function teamId() { var r = form.querySelector('input[name=team_id]:checked'); return r ? r.value : null; }
 
@@ -145,6 +166,7 @@
         });
         toggleCustom();
         loadAssets();
+        checkSimilar();
     }
 
     function toggleCustom() {
@@ -152,6 +174,74 @@
         var need = !!(c && c.custom);
         customWrap.hidden = !need;
         custom.required = need;
+        if (desc) { desc.setAttribute('placeholder', (c && c.hint) ? c.hint : defaultDesc); }
+        autoTitle();
+    }
+
+    // Pratinjau judul otomatis: "Kategori – Lokasi" (sama seperti di server).
+    function autoTitle() {
+        var c = current[cat.value];
+        var name = c ? ((c.custom && custom.value.trim()) ? custom.value.trim() : c.name) : '';
+        var l = loc.options[loc.selectedIndex];
+        var where = loc.value && l ? l.textContent.replace(/\s*\(.*\)\s*$/, '').trim() : '';
+        var auto = name ? name + (where ? ' – ' + where : '') : '';
+        title.setAttribute('placeholder', auto ? auto : 'Kosongkan untuk judul otomatis');
+        titleHint.textContent = auto ? 'Jika dikosongkan, judulnya: “' + auto + '”.' : 'Jika dikosongkan, judul dibuat otomatis dari kategori dan lokasi.';
+    }
+
+    // ===== Cari jenis masalah: pilih kategori, regu ikut terpilih =====
+    var q = document.getElementById('cat-q');
+    var results = document.getElementById('cat-results');
+    var index = [];
+    Object.keys(map).forEach(function (tid) {
+        (map[tid] || []).forEach(function (c) {
+            if (c.custom) { return; }
+            index.push({ team: tid, id: c.id, name: c.name, hay: norm(c.name + ' ' + c.keywords + ' ' + (teamsInfo[tid] ? teamsInfo[tid].name : '')) });
+        });
+    });
+    function norm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+    function esc(t) { var d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML.replace(/"/g, '&quot;'); }
+    function search() {
+        var words = norm(q.value).split(' ').filter(Boolean);
+        if (!words.length) { results.hidden = true; results.innerHTML = ''; return; }
+        var hits = index.map(function (it) {
+            var score = 0;
+            for (var i = 0; i < words.length; i++) {
+                var w = words[i];
+                if ((' ' + it.hay + ' ').indexOf(' ' + w) === -1) { return null; }
+                score += norm(it.name).indexOf(w) === 0 ? 3 : (norm(it.name).indexOf(w) > -1 ? 2 : 1);
+            }
+            return { it: it, score: score };
+        }).filter(Boolean).sort(function (a, b) { return b.score - a.score; }).slice(0, 6);
+
+        if (!hits.length) {
+            results.innerHTML = '<p class="cat-empty">Tidak ditemukan. Pilih regu di bawah, lalu kategori “Lainnya”.</p>';
+        } else {
+            results.innerHTML = hits.map(function (h) {
+                var t = teamsInfo[h.it.team] || { name: '', color: '#64748B' };
+                return '<button type="button" class="cat-hit" data-team="' + h.it.team + '" data-cat="' + h.it.id + '">'
+                    + '<span class="ico" style="background:' + t.color + '">' + (h.it.name.charAt(0) || '?') + '</span>'
+                    + '<span><span class="strong">' + esc(h.it.name) + '</span><span class="meta">Regu ' + esc(t.name) + '</span></span></button>';
+            }).join('');
+        }
+        results.hidden = false;
+    }
+    if (q) {
+        q.addEventListener('input', search);
+        q.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); var first = results.querySelector('.cat-hit'); if (first) { first.click(); } }
+        });
+        results.addEventListener('click', function (e) {
+            var b = e.target.closest('.cat-hit');
+            if (!b) { return; }
+            var radio = form.querySelector('input[name=team_id][value="' + b.dataset.team + '"]');
+            if (radio) { radio.checked = true; }
+            oldCat = b.dataset.cat; asset.value = '';
+            renderCategories();
+            q.value = ''; results.hidden = true; results.innerHTML = '';
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(function () { title.focus({ preventScroll: true }); }, 400);
+        });
     }
 
     function loadAssets() {
@@ -175,22 +265,44 @@
             .catch(function () { assetWrap.hidden = true; });
     }
 
-    form.addEventListener('change', function (e) {
-        if (e.target.name === 'team_id') { oldCat = null; asset.value = ''; renderCategories(); card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-        if (e.target === cat) { toggleCustom(); }
-        if (e.target === loc) { asset.value = ''; loadAssets(); }
-        if (e.target.name === 'priority') { highlight(); }
-    });
-
-    function highlight() {
-        form.querySelectorAll('input[name=priority]').forEach(function (r) {
-            var lab = r.closest('label');
-            lab.classList.toggle('picked', r.checked);
-        });
+    // ===== Peringatan laporan serupa yang masih aktif =====
+    var similar = document.getElementById('similar');
+    var simTimer = null, simSeq = 0;
+    function checkSimilar() {
+        clearTimeout(simTimer);
+        simTimer = setTimeout(function () {
+            var id = teamId();
+            if (!id || !cat.value || (!loc.value && !asset.value)) { similar.hidden = true; return; }
+            var seq = ++simSeq;
+            var url = similarUrl + '?team_id=' + encodeURIComponent(id) + '&category_id=' + encodeURIComponent(cat.value)
+                + '&location_id=' + encodeURIComponent(loc.value || '') + '&inventory_item_id=' + encodeURIComponent(asset.value || '');
+            fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+                .then(function (r) { return r.ok ? r.json() : []; })
+                .then(function (rows) {
+                    if (seq !== simSeq) { return; }
+                    if (!rows.length) { similar.hidden = true; similar.innerHTML = ''; return; }
+                    similar.innerHTML = '<div style="flex:1;min-width:0"><strong>Sudah ada laporan aktif untuk ini.</strong> '
+                        + 'Jika masalahnya sama, cukup pantau statusnya. Jika berbeda, lanjutkan mengisi.'
+                        + '<ul class="similar-list">' + rows.map(function (r) {
+                            return '<li><span class="mono strong">' + esc(r.number) + '</span> · ' + esc(r.label) + ' · <span class="strong">' + esc(r.status) + '</span> <span class="muted">(' + esc(r.age) + ')</span>'
+                                + (r.mine ? ' <span class="muted">laporan Anda</span>' : '')
+                                + ' <a href="' + esc(r.url) + '" target="_blank" rel="noopener">Lihat status</a></li>';
+                        }).join('') + '</ul></div>';
+                    similar.hidden = false;
+                })
+                .catch(function () { similar.hidden = true; });
+        }, 250);
     }
 
+    form.addEventListener('change', function (e) {
+        if (e.target.name === 'team_id') { oldCat = null; asset.value = ''; renderCategories(); card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        if (e.target === cat) { toggleCustom(); checkSimilar(); }
+        if (e.target === loc) { asset.value = ''; loadAssets(); autoTitle(); checkSimilar(); }
+        if (e.target === asset) { checkSimilar(); }
+    });
+    custom.addEventListener('input', autoTitle);
+
     renderCategories();
-    highlight();
 })();
 </script>
 @endpush

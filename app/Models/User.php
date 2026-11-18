@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Support\Phone;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -40,6 +42,20 @@ class User extends Authenticatable
         'is_active' => 'boolean',
         'last_login_at' => 'datetime',
     ];
+
+    /** Nomor HP otomatis disimpan dalam format 62xxxxxxxxxx (siap dipakai Fonnte/Wablas). */
+    protected function phone(): Attribute
+    {
+        return Attribute::make(
+            set: fn ($v) => $v === null || trim((string) $v) === '' ? null : (Phone::normalize((string) $v) ?? trim((string) $v)),
+        );
+    }
+
+    /** Nomor WhatsApp yang valid (62...), atau null bila belum diisi / tidak valid. */
+    public function waNumber(): ?string
+    {
+        return Phone::normalize($this->phone);
+    }
 
     /** Cache per-instance untuk daftar ID regu yang ditangani. */
     private ?array $handledTeamIds = null;

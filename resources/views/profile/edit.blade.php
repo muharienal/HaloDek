@@ -7,7 +7,7 @@
         <div class="alert alert-warning"><x-icon name="lock" :size="18" /><div><strong>Ganti password bawaan Anda.</strong> Anda baru dapat memakai aplikasi setelah membuat password baru.</div></div>
     @endif
 
-    <div class="grid cols-2" style="align-items:start">
+    <div class="grid {{ $user->isKaryawan() ? '' : 'cols-2' }}" style="align-items:start;{{ $user->isKaryawan() ? 'max-width:720px' : '' }}">
         <div class="card">
             <div class="card-head"><h2>Data Diri</h2></div>
             <form method="POST" action="{{ route('profile.update') }}" class="card-body" style="display:grid;gap:16px">
@@ -25,17 +25,12 @@
                         <div class="flex gap-2 wrap">@if ($user->team)<x-team-chip :team="$user->team" />@else<span class="muted">–</span>@endif</div></div>
                 @endif
                 <x-input name="email" type="email" label="Email" :value="$user->email" />
-                <x-input name="phone" label="No. HP / WhatsApp" :value="$user->phone" />
+                <x-input name="phone" type="tel" inputmode="tel" label="No. WhatsApp" :value="$user->phone" placeholder="0812 3456 7890" maxlength="20" autocomplete="tel" data-phone hint="Otomatis berformat 62. Dipakai untuk kabar laporan lewat WhatsApp (diproses, selesai). Kosongkan jika tidak mau menerima." />
                 <div><button class="btn btn-primary"><x-icon name="save" :size="16" /> Simpan Profil</button></div>
             </form>
         </div>
 
-        @if ($user->isKaryawan())
-        <div class="card">
-            <div class="card-head"><h2>Cara Masuk</h2></div>
-            <div class="card-body"><p class="muted">Akun karyawan masuk ke {{ config('halodek.name') }} hanya dengan <strong>NIK</strong> — tidak perlu password.</p></div>
-        </div>
-        @else
+        @if (! $user->isKaryawan())
         <div class="card">
             <div class="card-head"><h2>Ganti Password</h2></div>
             <form method="POST" action="{{ route('profile.password') }}" class="card-body" style="display:grid;gap:16px">

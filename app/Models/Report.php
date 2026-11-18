@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\WorkHours;
+use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -25,7 +27,23 @@ class Report extends Model
     protected $casts = [
         'first_response_at' => 'datetime',
         'resolved_at' => 'datetime',
+        'satisfied' => 'boolean',
+        'reminded_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        // Durasi jam kerja dihitung sekali saat waktunya berubah, agar statistik cukup AVG() di database.
+        static::saving(function (Report $r) {
+            $created = $r->created_at ?? now();
+            if ($r->isDirty(['first_response_at', 'created_at']) || ($r->first_response_at && $r->respond_work_minutes === null)) {
+                $r->respond_work_minutes = $r->first_response_at ? WorkHours::minutesBetween($created, $r->first_response_at) : null;
+            }
+            if ($r->isDirty(['resolved_at', 'created_at']) || ($r->resolved_at && $r->resolve_work_minutes === null)) {
+                $r->resolve_work_minutes = $r->resolved_at ? WorkHours::minutesBetween($created, $r->resolved_at) : null;
+            }
+        });
+    }
 
     // ---------------------------------------------------------------- relasi
 
@@ -103,6 +121,14 @@ class Report extends Model
         return in_array($this->status, self::OPEN_STATUSES, true);
     }
 
+    /** Pelapor masih boleh membuka kembali laporan selesai selama batas hari ini belum lewat. */
+    public function canStillReopen(): bool
+    {
+        return $this->status === 'selesai'
+            && $this->resolved_at
+            && $this->resolved_at->gt(now()->subDays((int) config('halodek.reopen_days', 7)));
+    }
+
     public function categoryDisplayName(): string
     {
         return $this->custom_category ?: ($this->category->name ?? '-');
@@ -128,10 +154,35 @@ class Report extends Model
         return config("halodek.priorities.{$this->priority}.tone", 'gray');
     }
 
-    /** Lama penyelesaian dalam jam (null bila belum selesai). */
+    /** Lama penyelesaian dalam JAM KERJA (null bila belum selesai). */
     public function resolutionHours(): ?float
     {
-        return $this->resolved_at ? round($this->created_at->diffInMinutes($this->resolved_at) / 60, 1) : null;
+        if (! $this->resolved_at) {
+            return null;
+        }
+        $minutes = $this->resolve_work_minutes ?? WorkHours::minutesBetween($this->created_at, $this->resolved_at);
+
+        return round($minutes / 60, 1);
+    }
+
+    /** Batas respons: waktu paling lambat laporan diambil/ditugaskan (dihitung dalam jam kerja). */
+    public function responseDeadline(): Carbon
+    {
+        $hours = (float) config('halodek.response_sla.'.$this->priority, config('halodek.response_sla.sedang', 4));
+
+        return WorkHours::addHours($this->created_at, $hours);
+    }
+
+    /** Lewat batas = masih menunggu di antrean (belum ada penanggung jawab) melewati batas respons. */
+    public function isOverdue(): bool
+    {
+        return $this->isOpen() && $this->assigned_to_id === null && now()->gt($this->responseDeadline());
+    }
+
+    /** Sudah berapa jam kerja laporan menunggu sejak dibuat. */
+    public function waitingWorkHours(): float
+    {
+        return round(WorkHours::minutesBetween($this->created_at, now()) / 60, 1);
     }
 
     /** Token pendek (16 hex) untuk halaman pantau tanpa login; diturunkan dari APP_KEY. */

@@ -15,7 +15,7 @@
             @endif
             @php $offset += $len; @endphp
         @endforeach
-        <text x="70" y="68" text-anchor="middle" style="font-size:22px;font-weight:800;fill:#0F172A">{{ $center ?? collect($items)->sum('value') }}</text>
+        <text x="70" y="68" text-anchor="middle" style="font-size:22px;font-weight:700;fill:#0F172A">{{ $center ?? collect($items)->sum('value') }}</text>
         <text x="70" y="86" text-anchor="middle" style="font-size:10px">total</text>
     </svg>
     <ul class="donut-legend">

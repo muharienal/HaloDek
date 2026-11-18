@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Support\Phone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,6 +13,8 @@ use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
+    private const PHONE_ERROR = 'Nomor WhatsApp tidak valid. Contoh: 0812 3456 7890.';
+
     public function edit(Request $request): View
     {
         return view('profile.edit', ['user' => $request->user()->load('team')]);
@@ -23,12 +26,36 @@ class ProfileController extends Controller
 
         $data = $request->validate([
             'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-            'phone' => ['nullable', 'string', 'max:30'],
         ]);
 
-        $user->update($data);
+        $phone = trim((string) $request->input('phone'));
+        if ($phone !== '' && ! Phone::normalize($phone)) {
+            return back()->withInput()->withErrors(['phone' => self::PHONE_ERROR]);
+        }
+
+        $user->update($data + ['phone' => $phone]);
 
         return back()->with('success', 'Profil berhasil diperbarui.');
+    }
+
+    /** Dari popup/badge pengingat: simpan nomor WhatsApp (kolom phone). Kosong = berhenti menerima. */
+    public function whatsapp(Request $request): RedirectResponse
+    {
+        $phone = trim((string) $request->input('phone'));
+
+        if ($phone === '') {
+            $request->user()->update(['phone' => null]);
+
+            return back()->with('success', 'Nomor WhatsApp dihapus. Kabar laporan tidak lagi dikirim lewat WhatsApp.');
+        }
+
+        if (! Phone::normalize($phone)) {
+            return back()->withInput()->withErrors(['phone' => self::PHONE_ERROR]);
+        }
+
+        $request->user()->update(['phone' => $phone]);
+
+        return back()->with('success', 'Nomor WhatsApp disimpan. Anda akan mendapat kabar saat laporan diproses atau selesai.');
     }
 
     public function password(Request $request): RedirectResponse

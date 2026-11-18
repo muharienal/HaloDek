@@ -9,6 +9,9 @@
 /storage/*.key
 /database/*.sqlite
 auth.json
+Homestead.json
+Homestead.yaml
+npm-debug.log
 /.idea
 /.vscode
 .DS_Store
