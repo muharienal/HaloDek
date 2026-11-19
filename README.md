@@ -1,12 +1,13 @@
 # HaloDek
 
+<<<<<<< HEAD
 Layanan pengaduan dan pelaporan terpadu PT Petrokopindo Cipta Selaras. Karyawan mengajukan laporan ke empat regu (**IT**, **Sarana dan Prasarana**, **Kesekretariatan**, **Keamanan**), lalu regu menangani dan memantaunya sampai selesai. Dibangun dengan Laravel 10 (PHP + Blade), tanpa npm / Node / CDN.
 
 Data aset, lokasi, dan stok dikelola di aplikasi terpisah **Inventaris Umum & IT**. HaloDek mengambil lokasi dan barang dari sana lewat API (lihat [Terhubung ke Inventaris](#terhubung-ke-inventaris-umum--it)).
 
+=======
+>>>>>>> e8636b4f06306a1e14018c038ff79c1e2dfc83ec
 ## Instalasi di Windows
-
-**Yang dibutuhkan:** [Laragon Full](https://laragon.org/download/) (sudah berisi PHP, MySQL, dan Composer) dan [Git](https://git-scm.com/download/win).
 
 1. Jalankan Laragon, klik **Start All**.
 2. Buka **Terminal** Laragon (atau Git Bash), lalu unduh proyek:
@@ -33,6 +34,7 @@ Data aset, lokasi, dan stok dikelola di aplikasi terpisah **Inventaris Umum & IT
    Buka **http://localhost:8000**.
 
 **Login awal (mode lokal):** tab **Admin**, NIK `00001`, password `00001` (Superadmin). Segera ganti password di menu profil.
+<<<<<<< HEAD
 
 Ingin data contoh untuk mencoba? Jalankan `php artisan db:seed --class=DemoSeeder` (hanya untuk mode lokal; semua akun demo memakai password = NIK, karyawan cukup NIK).
 
@@ -115,6 +117,8 @@ Pengingat berjalan **otomatis dari dalam aplikasi**, tanpa Task Scheduler atau c
 - Jangan pernah meng-commit file `.env` (sudah diabaikan oleh Git).
 - Untuk server sungguhan: `APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SECURE_COOKIE=true`, pakai HTTPS, arahkan web root ke folder `public`, dan jangan jalankan `DemoSeeder`.
 
+=======
+>>>>>>> e8636b4f06306a1e14018c038ff79c1e2dfc83ec
 ## Pengujian
 
 ```bash
