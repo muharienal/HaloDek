@@ -60,7 +60,7 @@ class ReportPolicy
 
     public function comment(User $user, Report $report): bool
     {
-        if ($this->handles($user, $report)) {
+        if ($user->canAct() && $this->handles($user, $report)) {
             return true;
         }
 

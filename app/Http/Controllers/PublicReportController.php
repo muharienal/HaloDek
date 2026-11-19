@@ -22,7 +22,7 @@ class PublicReportController extends Controller
     public function show(Report $report, string $token): View
     {
         $this->guard($report, $token);
-        $report->load(['team', 'category', 'location', 'item', 'assignee', 'user']);
+        $report->load(['team', 'category', 'assignee', 'user']);
 
         $activities = $report->activities()
             ->where('is_internal', false)

@@ -3,7 +3,13 @@
 @section('subtitle', $item->code.' · '.$item->category->name.' · '.$item->team->name)
 
 @section('content')
-<div class="mb-4"><a href="{{ route('admin.inventory.index', ['team_id' => $item->team_id, 'category' => $item->inventory_category_id]) }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Kembali ke inventaris</a></div>
+<div class="flex items-center justify-between wrap gap-2 mb-4">
+    <a href="{{ route('admin.inventory.index', ['team_id' => $item->team_id, 'category' => $item->inventory_category_id]) }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Kembali ke inventaris</a>
+    <div class="flex gap-2 wrap">
+        <a class="btn btn-secondary btn-sm" href="{{ route('admin.inventory.qr', ['item' => $item->id]) }}" target="_blank" rel="noopener"><x-icon name="qr" :size="16" /> Cetak QR</a>
+        @if ($item->status !== 'non-aktif')<a class="btn btn-primary btn-sm" href="{{ route('scan', ['item' => $item->id, 'lapor' => 1]) }}"><x-icon name="plus" :size="16" /> Buat Laporan</a>@endif
+    </div>
+</div>
 
 <div class="grid cols-main" style="align-items:start">
     <div class="card">

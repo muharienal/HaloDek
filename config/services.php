@@ -44,4 +44,14 @@ return [
         'timeout' => 8,
     ],
 
+    /*
+     * Inventaris Umum & IT: lokasi dan barang diambil dari sini lewat API.
+     * Bila tidak tersedia, HaloDek tetap berjalan (pilihan lokasi/barang kosong).
+     */
+    'inventaris' => [
+        'url' => rtrim((string) env('INVENTARIS_URL', ''), '/'),
+        'token' => env('INVENTARIS_API_TOKEN', ''),
+        'timeout' => 4,
+    ],
+
 ];

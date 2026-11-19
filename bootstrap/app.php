@@ -11,6 +11,13 @@
 |
 */
 
+/*
+| HaloDek dan Inventaris sering dijalankan di Apache yang sama (Laragon, Windows). Apache di Windows
+| memakai satu proses untuk semua situs, sehingga putenv() dari .env satu aplikasi bisa terbaca oleh
+| aplikasi lain (mis. DB_DATABASE tertukar). Matikan putenv agar .env tiap aplikasi tidak bocor.
+*/
+Illuminate\Support\Env::disablePutenv();
+
 $app = new Illuminate\Foundation\Application(
     $_ENV['APP_BASE_PATH'] ?? dirname(__DIR__)
 );

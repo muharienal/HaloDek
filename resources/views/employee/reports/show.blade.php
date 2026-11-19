@@ -52,7 +52,7 @@
         <div class="card">
             <div class="card-head"><h2>Riwayat &amp; Percakapan</h2></div>
             <div class="card-body">
-                @include('partials.timeline', ['activities' => $activities, 'viewer' => $me])
+                @include('partials.timeline', ['activities' => $activities, 'viewer' => $me, 'hideNote' => in_array($report->status, ['selesai', 'ditolak'], true) ? $report->follow_up_note : null])
             </div>
             @can('comment', $report)
                 <form method="POST" action="{{ route('employee.reports.comment', $report) }}" enctype="multipart/form-data" class="card-foot" style="display:grid;gap:10px">
@@ -78,10 +78,10 @@
                 <div><div class="text-xs muted">Kategori</div><div>{{ $report->categoryDisplayName() }}</div></div>
                 <div><div class="text-xs muted">Diajukan</div><div>{{ $report->created_at->translatedFormat('d M Y, H:i') }}</div></div>
                 
-                @if ($report->resolved_at)<div><div class="text-xs muted">Selesai pada</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionHours() }} jam kerja)</span></div></div>@endif
+                @if ($report->resolved_at)<div><div class="text-xs muted">Selesai pada</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionText() }})</span></div></div>@endif
                 <div><div class="text-xs muted">Penanggung jawab</div><div>{{ $report->assignee->name ?? 'Belum ditugaskan' }}</div></div>
-                @if ($report->location)<div><div class="text-xs muted">Lokasi</div><div>{{ $report->location->fullName() }}</div></div>@endif
-                @if ($report->item)<div><div class="text-xs muted">Barang / ruangan</div><div>{{ $report->item->label() }}</div></div>@endif
+                @if ($report->location_name)<div><div class="text-xs muted">Lokasi</div><div>{{ $report->location_name }}</div></div>@endif
+                @if ($report->assetLabel())<div><div class="text-xs muted">Barang terkait</div><div>{{ $report->assetLabel() }}</div></div>@endif
             </div>
         </div>
 

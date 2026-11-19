@@ -167,7 +167,7 @@ class WhatsAppNotifier
 
     public function message(Report $report): string
     {
-        $report->loadMissing(['team', 'user', 'category', 'location', 'item']);
+        $report->loadMissing(['team', 'user', 'category']);
 
         $reporter = $report->reporter_name ?: ($report->user->name ?? '-');
         $meta = array_filter([$report->user->nik ?? null ? 'NIK '.$report->user->nik : null, $report->user->department ?? null]);
@@ -183,11 +183,11 @@ class WhatsAppNotifier
             'Kategori: '.$report->categoryDisplayName(),
             'Prioritas: '.$report->priorityLabel(),
         ];
-        if ($report->location) {
-            $lines[] = 'Lokasi: '.$report->location->fullName();
+        if ($report->location_name) {
+            $lines[] = 'Lokasi: '.$report->location_name;
         }
-        if ($report->item) {
-            $lines[] = 'Perangkat/aset: '.$report->item->name.($report->item->code ? ' ('.$report->item->code.')' : '');
+        if ($report->assetLabel()) {
+            $lines[] = 'Barang: '.$report->asset_name.($report->asset_code ? ' ('.$report->asset_code.')' : '');
         }
         $lines[] = '';
         $lines[] = 'Pelapor: '.$reporter.($meta ? ' ('.implode(', ', $meta).')' : '');

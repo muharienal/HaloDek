@@ -49,8 +49,11 @@ class ReportService
                         'team_id' => $team->id,
                         'category_id' => $category->id,
                         'custom_category' => $category->allow_custom ? ($data['custom_category'] ?? null) : null,
-                        'inventory_item_id' => $data['inventory_item_id'] ?? null,
-                        'location_id' => $data['location_id'] ?? null,
+                        'asset_id' => $data['asset_id'] ?? null,
+                        'asset_code' => $data['asset_code'] ?? null,
+                        'asset_name' => $data['asset_name'] ?? null,
+                        'inventory_location_id' => $data['inventory_location_id'] ?? null,
+                        'location_name' => $data['location_name'] ?? null,
                         'title' => $data['title'],
                         'description' => $data['description'],
                         'priority' => $priority,
@@ -201,7 +204,6 @@ class ReportService
             $report->category_id = $category->id;
             $report->custom_category = null;
             $report->assigned_to_id = null;
-            $report->inventory_item_id = null; // item inventaris milik regu lama
             $report->status = 'menunggu';
             $report->resolved_at = null;
             $report->reminded_at = null;

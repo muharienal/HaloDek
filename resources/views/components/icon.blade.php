@@ -51,6 +51,7 @@
         'chat' => '<path d="M5 5.5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5v-3.5H5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1Z" />',
         'star' => '<path d="m12 4 2.4 5 5.4.7-4 3.8 1 5.4-4.8-2.7-4.8 2.7 1-5.4-4-3.8 5.4-.7Z" />',
         'filter' => '<path d="M4 6h16l-6 7.5V19l-4-2v-3.5Z" />',
+        'qr' => '<rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><path d="M14 14h2v2h-2zM18 14h2M14 18h2M18 18h2v2M16 16h2v2" />',
         'print' => '<path d="M7 8.5V4h10v4.5" /><rect x="5" y="8.5" width="14" height="7" rx="1.2" /><path d="M7 14.5h10V20H7Z" />',
         'lock' => '<rect x="5.5" y="10.5" width="13" height="9" rx="1.5" /><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" />',
         'key' => '<circle cx="8.5" cy="14.5" r="3.5" /><path d="m11 12 8-8M16 7l2.5 2.5M14 9l2 2" />',
@@ -63,6 +64,7 @@
         'swap' => '<path d="M5 8h13l-3.5-3.5M19 16H6l3.5 3.5" />',
         'power' => '<path d="M12 3.5v8" /><path d="M7 6.5a7.5 7.5 0 1 0 10 0" />',
         'laptop' => '<rect x="5" y="5.5" width="14" height="10" rx="1.2" /><path d="M3 18.5h18" />',
+        'external' => '<path d="M14 5h5v5" /><path d="M19 5l-8 8" /><path d="M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" />',
         'chart' => '<path d="M4.5 19.5h15" /><path d="M7.5 16.5v-5M12 16.5v-9M16.5 16.5v-6.5" />',
         'list' => '<path d="M8.5 6.5H20M8.5 12H20M8.5 17.5H20M4 6.5h.01M4 12h.01M4 17.5h.01" />',
     ];

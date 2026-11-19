@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Dashboard') · {{ config('halodek.name') }}</title>
+    <title>@yield('title', 'Beranda') · {{ config('halodek.name') }}</title>
     @include('partials.head-icons')
     <link rel="stylesheet" href="{{ asset('css/halodek.css') }}?v={{ filemtime(public_path('css/halodek.css')) }}">
     @stack('head')
@@ -18,7 +18,6 @@
     $isDash = $on('dashboard');
     $mineTasks = $on('admin.reports.index') && request('assigned') === 'me';
     $queueView = $on('admin.reports.index') && request('assigned') === 'none';
-    $canLocations = $me->isSuperadmin() || $me->isHead();
 
     $hour = (int) now()->format('G');
     $greeting = $hour < 11 ? 'Selamat pagi' : ($hour < 15 ? 'Selamat siang' : ($hour < 18 ? 'Selamat sore' : 'Selamat malam'));
@@ -37,7 +36,7 @@
         </a>
 
         <nav class="topnav-links" aria-label="Menu utama">
-            <a href="{{ route('dashboard') }}" class="nav-link {{ $act($isDash) }}">Dashboard</a>
+            <a href="{{ route('dashboard') }}" class="nav-link {{ $act($isDash) }}">Beranda</a>
 
             @if ($isAdmin)
                 <div class="dropdown nav-dd">
@@ -55,19 +54,6 @@
                     </div>
                 </div>
 
-                @if ($canLocations)
-                    <div class="dropdown nav-dd">
-                        <button type="button" class="nav-link {{ $act($on('admin.inventory.*', 'admin.locations.*')) }}" data-dropdown-toggle aria-expanded="false">
-                            Inventaris <x-icon name="chevron-down" :size="13" />
-                        </button>
-                        <div class="dropdown-menu">
-                            <a class="dropdown-item {{ $act($on('admin.inventory.*')) }}" href="{{ route('admin.inventory.index') }}">Inventaris Regu</a>
-                            <a class="dropdown-item {{ $act($on('admin.locations.*')) }}" href="{{ route('admin.locations.index') }}">Lokasi &amp; Ruangan</a>
-                        </div>
-                    </div>
-                @else
-                    <a href="{{ route('admin.inventory.index') }}" class="nav-link {{ $act($on('admin.inventory.*')) }}">Inventaris</a>
-                @endif
             @else
                 <a href="{{ route('employee.reports.index') }}" class="nav-link {{ $act($on('employee.reports.index', 'employee.reports.show')) }}">Laporan Saya</a>
             @endif
@@ -81,7 +67,7 @@
                     </button>
                     <div class="dropdown-menu">
                         <a class="dropdown-item {{ $act($on('admin.users.*')) }}" href="{{ route('admin.users.index') }}">Manajemen Pengguna</a>
-                        <a class="dropdown-item {{ $act($on('admin.audit.*')) }}" href="{{ route('admin.audit.index') }}">Audit Log</a>
+                        <a class="dropdown-item {{ $act($on('admin.audit.*')) }}" href="{{ route('admin.audit.index') }}">Log Aktivitas</a>
                     </div>
                 </div>
             @endif
@@ -162,14 +148,14 @@
 
 <main class="shell">
     @unless ($isDash)
-        <div class="page-head"><h1>@yield('title', 'Dashboard')</h1></div>
+        <div class="page-head"><h1>@yield('title', 'Beranda')</h1></div>
     @endunless
 
     @include('components.flash')
     @yield('content')
 </main>
 
-<footer class="footer">© {{ date('Y') }} IT {{ config('halodek.company') }}</footer>
+<footer class="footer">IT {{ config('halodek.company') }} © {{ date('Y') }}</footer>
 
 {{-- ===================== DOCK BAWAH & MENU (MOBILE) ===================== --}}
 <nav class="bottomnav" aria-label="Navigasi cepat">
@@ -193,7 +179,7 @@
 
     <div class="sheet-title">Menu</div>
     <div class="sheet-grid">
-        <a class="tile {{ $act($isDash) }}" href="{{ route('dashboard') }}"><span class="tile-ico tone-blue"><x-icon name="home" :size="22" /></span>Dashboard</a>
+        <a class="tile {{ $act($isDash) }}" href="{{ route('dashboard') }}"><span class="tile-ico tone-blue"><x-icon name="home" :size="22" /></span>Beranda</a>
         <a class="tile" href="{{ route('employee.reports.create') }}"><span class="tile-ico tone-green"><x-icon name="plus" :size="22" /></span>Ajukan</a>
         <a class="tile {{ $act($on('employee.reports.index', 'employee.reports.show')) }}" href="{{ route('employee.reports.index') }}"><span class="tile-ico tone-violet"><x-icon name="document" :size="22" /></span>Laporan Saya</a>
         <a class="tile {{ $act($on('announcements.*')) }}" href="{{ route('announcements.index') }}"><span class="tile-ico tone-amber"><x-icon name="megaphone" :size="22" /></span>Pengumuman</a>
@@ -210,13 +196,9 @@
             <a class="tile {{ $act($mineTasks) }}" href="{{ route('admin.reports.index', ['assigned' => 'me', 'status' => 'aktif']) }}"><span class="tile-ico tone-green"><x-icon name="check-circle" :size="22" /></span>Tugas Saya</a>
             <a class="tile {{ $act($on('admin.teams.*')) }}" href="{{ route('admin.teams.index') }}"><span class="tile-ico tone-violet"><x-icon name="users" :size="22" /></span>{{ $me->isSuperadmin() ? 'Regu' : 'Regu Saya' }}</a>
             <a class="tile {{ $act($on('admin.monthly.*')) }}" href="{{ route('admin.monthly.index') }}"><span class="tile-ico tone-teal"><x-icon name="chart" :size="22" /></span>Laporan Bulanan</a>
-            <a class="tile {{ $act($on('admin.inventory.*')) }}" href="{{ route('admin.inventory.index') }}"><span class="tile-ico tone-amber"><x-icon name="laptop" :size="22" /></span>Inventaris</a>
-            @if ($canLocations)
-                <a class="tile {{ $act($on('admin.locations.*')) }}" href="{{ route('admin.locations.index') }}"><span class="tile-ico tone-red"><x-icon name="pin" :size="22" /></span>Lokasi</a>
-            @endif
             @if ($me->isSuperadmin())
                 <a class="tile {{ $act($on('admin.users.*')) }}" href="{{ route('admin.users.index') }}"><span class="tile-ico tone-violet"><x-icon name="user" :size="22" /></span>Pengguna</a>
-                <a class="tile {{ $act($on('admin.audit.*')) }}" href="{{ route('admin.audit.index') }}"><span class="tile-ico tone-gray"><x-icon name="history" :size="22" /></span>Audit Log</a>
+                <a class="tile {{ $act($on('admin.audit.*')) }}" href="{{ route('admin.audit.index') }}"><span class="tile-ico tone-gray"><x-icon name="history" :size="22" /></span>Log Aktivitas</a>
             @endif
         </div>
     @endif

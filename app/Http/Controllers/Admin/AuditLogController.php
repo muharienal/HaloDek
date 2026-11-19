@@ -23,7 +23,7 @@ class AuditLogController extends Controller
             ->paginate(25)
             ->withQueryString();
 
-        $groups = ['user' => 'Pengguna', 'team' => 'Regu', 'category' => 'Kategori', 'inventory' => 'Inventaris', 'location' => 'Lokasi', 'announcement' => 'Pengumuman', 'report' => 'Laporan'];
+        $groups = ['user' => 'Pengguna', 'team' => 'Regu', 'category' => 'Kategori', 'announcement' => 'Pengumuman', 'report' => 'Laporan'];
 
         return view('admin.audit.index', compact('logs', 'search', 'action', 'groups'));
     }

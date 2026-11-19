@@ -54,6 +54,7 @@
         </div>
     </div>
 
+    <div style="display:grid;gap:20px;align-content:start;min-width:0">
     {{-- ===== ANGGOTA ===== --}}
     <div class="card">
         <div class="card-head"><h2>Kepala Regu &amp; Staf</h2>
@@ -69,7 +70,7 @@
                             <form method="POST" action="{{ route('admin.teams.members.head', [$team, $u]) }}" data-confirm="Jadikan {{ $u->name }} Kepala Regu? Kepala saat ini menjadi Staf." data-confirm-title="Ganti Kepala Regu" data-confirm-ok="Jadikan Kepala" data-confirm-tone="primary">
                                 @csrf @method('PATCH')<button class="btn btn-secondary btn-sm">Jadikan Kepala</button></form>
                         @endunless
-                        <form method="POST" action="{{ route('admin.teams.members.remove', [$team, $u]) }}" data-confirm="Keluarkan {{ $u->name }} dari regu {{ $team->name }}? Role kembali menjadi Karyawan." data-confirm-title="Keluarkan anggota" data-confirm-ok="Keluarkan">
+                        <form method="POST" action="{{ route('admin.teams.members.remove', [$team, $u]) }}" data-confirm="Keluarkan {{ $u->name }} dari regu {{ $team->name }}? Perannya kembali menjadi Karyawan." data-confirm-title="Keluarkan anggota" data-confirm-ok="Keluarkan">
                             @csrf @method('DELETE')<button class="btn btn-ghost btn-icon btn-sm" aria-label="Keluarkan"><x-icon name="x" :size="15" /></button></form>
                     @endif
                 </div>
@@ -77,6 +78,28 @@
                 <p class="muted text-sm">Belum ada anggota. Tambahkan Kepala Regu dan staf agar laporan dapat ditangani.</p>
             @endforelse
         </div>
+    </div>
+
+    {{-- ===== TEMPLATE CATATAN CEPAT ===== --}}
+    @php $tpl = $team->noteTemplates(); $canLead = auth()->user()->leadsTeam($team->id); @endphp
+    <div class="card">
+        <div class="card-head"><h2>Template Catatan</h2></div>
+        @if ($canLead)
+            <form method="POST" action="{{ route('admin.teams.templates', $team) }}" class="card-body" style="display:grid;gap:14px">
+                @csrf @method('PATCH')
+                <p class="hint" style="margin:0">Muncul sebagai pilihan cepat di popup Selesaikan dan Tolak. Satu template per baris (maks. 8).</p>
+                <x-textarea name="selesai" label="Saat menyelesaikan" rows="5" maxlength="3000" :value="old('selesai', implode(PHP_EOL, $tpl['selesai']))" />
+                <x-textarea name="ditolak" label="Saat menolak" rows="5" maxlength="3000" :value="old('ditolak', implode(PHP_EOL, $tpl['ditolak']))" />
+                <button class="btn btn-secondary"><x-icon name="save" :size="16" /> Simpan Template</button>
+            </form>
+        @else
+            <div class="card-body text-sm" style="display:grid;gap:6px">
+                @foreach ($tpl['selesai'] as $line)<div>✓ {{ $line }}</div>@endforeach
+                @foreach ($tpl['ditolak'] as $line)<div class="muted">✕ {{ $line }}</div>@endforeach
+                <p class="hint" style="margin:6px 0 0">Diatur oleh Kepala Regu.</p>
+            </div>
+        @endif
+    </div>
     </div>
 </div>
 @endsection

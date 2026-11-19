@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Audit Log')
+@section('title', 'Log Aktivitas')
 @section('subtitle', 'Jejak perubahan penting yang dilakukan admin')
 
 @section('content')

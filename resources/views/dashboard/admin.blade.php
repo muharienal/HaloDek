@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Dashboard')
+@section('title', 'Beranda')
 @section('subtitle', $teams->pluck('name')->take(4)->implode(' · ').($teams->count() > 4 ? ' +'.($teams->count() - 4) : ''))
 
 @section('content')
@@ -132,23 +132,20 @@
         </div>
         @endif
         <div style="display:grid;gap:20px;align-content:start">
+            @php $invUrl = config('services.inventaris.url') ?: null; @endphp
             <div class="card">
-                <div class="card-head"><h2>Ringkasan Inventaris</h2><a href="{{ route('admin.inventory.index') }}" class="text-sm strong">Kelola</a></div>
+                <div class="card-head"><h2>Barang Paling Sering Dilaporkan</h2></div>
                 <div class="card-body">
-                    <div class="flex gap-4 wrap mb-3">
-                        <div><div class="text-xl bold">{{ $inventory['total'] }}</div><div class="text-xs muted">Total item</div></div>
-                        <div><div class="text-xl bold" style="color:var(--danger)">{{ $inventory['broken'] }}</div><div class="text-xs muted">Rusak / perbaikan</div></div>
-                        <div><div class="text-xl bold" style="color:#B45309">{{ $inventory['due'] }}</div><div class="text-xs muted">Jatuh tempo ≤30 hari</div></div>
-                    </div>
-                    @php $maxCat = max(1, $inventory['by_category']->max() ?? 1); @endphp
-                    @forelse ($inventory['by_category'] as $name => $count)
-                        <div class="bar-row" style="grid-template-columns: 110px 1fr 30px">
-                            <span class="truncate">{{ $name }}</span>
-                            <div class="bar-track"><div class="bar-fill" style="width: {{ $count / $maxCat * 100 }}%"></div></div>
-                            <strong>{{ $count }}</strong>
+                    <p class="text-xs muted" style="margin:0 0 10px">90 hari terakhir. Barang yang berulang kali bermasalah sebaiknya diservis atau diganti.</p>
+                    @php $maxTop = max(1, (int) ($topAssets->max('total') ?? 1)); @endphp
+                    @forelse ($topAssets as $a)
+                        <div class="bar-row" style="grid-template-columns: minmax(0,1.4fr) 1fr 30px">
+                            <span class="truncate" title="{{ $a->name }}">@if ($invUrl)<a href="{{ $invUrl }}/aset/{{ $a->asset_id }}" target="_blank" rel="noopener" class="mono">{{ $a->code ?: '#'.$a->asset_id }}</a>@else<span class="mono">{{ $a->code ?: '#'.$a->asset_id }}</span>@endif {{ $a->name }}</span>
+                            <div class="bar-track"><div class="bar-fill" style="width: {{ $a->total / $maxTop * 100 }}%"></div></div>
+                            <strong title="{{ $a->open_count }} masih aktif">{{ $a->total }}</strong>
                         </div>
                     @empty
-                        <p class="muted text-sm">Belum ada item inventaris.</p>
+                        <p class="muted text-sm" style="margin:0">Belum ada laporan yang terkait barang.</p>
                     @endforelse
                 </div>
             </div>

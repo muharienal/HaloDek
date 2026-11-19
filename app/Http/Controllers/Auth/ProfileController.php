@@ -7,8 +7,6 @@ use App\Support\Phone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
@@ -24,16 +22,12 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
-        $data = $request->validate([
-            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-        ]);
-
         $phone = trim((string) $request->input('phone'));
         if ($phone !== '' && ! Phone::normalize($phone)) {
             return back()->withInput()->withErrors(['phone' => self::PHONE_ERROR]);
         }
 
-        $user->update($data + ['phone' => $phone]);
+        $user->update(['phone' => $phone]);
 
         return back()->with('success', 'Profil berhasil diperbarui.');
     }
@@ -64,16 +58,13 @@ class ProfileController extends Controller
 
         $data = $request->validate([
             'current_password' => ['required', 'current_password'],
-            'password' => ['required', 'confirmed', Password::min(10)->letters()->mixedCase()->numbers(), 'different:current_password'],
+            // Aturan dibuat longgar: cukup minimal 6 karakter, bebas isinya.
+            'password' => ['required', 'confirmed', 'string', 'min:6', 'max:255', 'different:current_password'],
         ], [
             'password.different' => 'Password baru harus berbeda dari password saat ini.',
             'password.confirmed' => 'Konfirmasi password baru tidak cocok.',
-            'password.min' => 'Password minimal 10 karakter.',
+            'password.min' => 'Password minimal 6 karakter.',
         ]);
-
-        if ($data['password'] === $user->nik) {
-            return back()->withErrors(['password' => 'Password tidak boleh sama dengan NIK.']);
-        }
 
         $user->update(['password' => $data['password'], 'must_change_password' => false]);
 

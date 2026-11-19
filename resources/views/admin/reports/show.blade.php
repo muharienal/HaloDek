@@ -60,6 +60,7 @@
         <div class="card">
             <div class="card-head"><h2>Riwayat &amp; Percakapan</h2></div>
             <div class="card-body">@include('partials.timeline', ['activities' => $activities, 'viewer' => $me])</div>
+            @can('comment', $report)
             <form method="POST" action="{{ route('admin.reports.comment', $report) }}" enctype="multipart/form-data" class="card-foot" style="display:grid;gap:10px">
                 @csrf
                 <x-textarea name="message" rows="3" maxlength="2000" required placeholder="Tulis balasan untuk pelapor, atau centang “internal” untuk catatan antar-anggota regu…" />
@@ -73,6 +74,7 @@
                 </div>
                 <div class="file-list" id="c-files" style="margin-top:0"></div><p class="error" id="c-err" hidden></p>
             </form>
+            @endcan
         </div>
     </div>
 
@@ -84,7 +86,9 @@
             <div class="card" style="border-color: var(--primary)">
                 <div class="card-head"><h2>Penanganan</h2></div>
                 <div class="card-body" style="display:grid;gap:12px">
-                    @if ($report->assignee)
+                    @if ($me->isManajer())
+                        <p class="text-sm">Anda memantau sebagai <strong>Manajer</strong>. {{ $report->assignee ? 'Laporan ini ditangani '.$report->assignee->name.'.' : 'Laporan ini belum diambil anggota regu.' }}</p>
+                    @elseif ($report->assignee)
                         <p class="text-sm">Laporan ini ditangani <strong>{{ $report->assignee->name }}</strong>. Hanya penanggung jawab dan Kepala Regu yang dapat mengubah statusnya.</p>
                     @else
                         <p class="text-sm">Laporan ini menunggu diambil. Tekan <strong>Ambil Laporan</strong> di atas untuk mulai mengerjakannya.</p>
@@ -103,7 +107,7 @@
                         @foreach ($staff as $s)<option value="{{ $s->id }}" @selected(old('assigned_to_id', $report->assigned_to_id) == $s->id)>{{ $s->name }} — {{ $s->id === $me->id ? 'saya, ' : '' }}{{ config('halodek.roles.'.$s->role) }}</option>@endforeach
                     </x-select>
                     <x-select name="priority" label="Prioritas" required>
-                        @foreach (config('halodek.priorities') as $k => $p)<option value="{{ $k }}" @selected(old('priority', $report->priority) === $k)>{{ $p['label'] }} — {{ $p['hint'] }}</option>@endforeach
+                        @foreach (config('halodek.priorities') as $k => $p)<option value="{{ $k }}" @selected(old('priority', $report->priority) === $k)>{{ $p['label'] }}</option>@endforeach
                     </x-select>
                 @endif
                 <details class="more" @if ($manualOpen || ! $report->isOpen()) open @endif>
@@ -141,11 +145,12 @@
                         @if ($report->isOverdue())<span class="badge tone-red plain overdue-badge">Lewat batas</span>@endif</div>
                         <div class="text-xs faint">{{ config('halodek.response_sla.'.$report->priority) }} jam kerja untuk prioritas {{ $report->priorityLabel() }}</div></div>
                 @endif
-                <div><div class="text-xs muted">Respons pertama</div><div>{{ $report->first_response_at ? $report->first_response_at->translatedFormat('d M Y, H:i').' ('.$report->created_at->diffForHumans($report->first_response_at, true).')' : 'Belum ada respons' }}</div></div>
-                @if ($report->resolved_at)<div><div class="text-xs muted">Selesai</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionHours() }} jam kerja)</span></div></div>@endif
+                <div><div class="text-xs muted">Respons pertama</div><div>@if ($report->first_response_at){{ $report->first_response_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->responseText() }})</span>@else Belum ada respons @endif</div></div>
+                @if ($report->resolved_at)<div><div class="text-xs muted">Selesai</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionText() }})</span></div></div>@endif
                 @if ($report->status === 'selesai')<div><div class="text-xs muted">Konfirmasi pelapor</div><div>{{ $report->satisfied ? 'Sudah beres' : 'Belum dijawab' }}</div></div>@endif
-                @if ($report->location)<div><div class="text-xs muted">Lokasi</div><div>{{ $report->location->fullName() }}</div></div>@endif
-                @if ($report->item)<div><div class="text-xs muted">Inventaris terkait</div><a href="{{ route('admin.inventory.items.show', $report->item) }}">{{ $report->item->label() }}</a></div>@endif
+                @if ($report->location_name)<div><div class="text-xs muted">Lokasi</div><div>{{ $report->location_name }}</div></div>@endif
+                @if ($report->assetLabel())<div><div class="text-xs muted">Barang terkait</div>
+                    @if ($assetUrl)<a href="{{ $assetUrl }}" target="_blank" rel="noopener" title="Buka di Inventaris">{{ $report->assetLabel() }}</a>@else<div>{{ $report->assetLabel() }}</div>@endif</div>@endif
             </div>
         </div>
 
@@ -187,6 +192,12 @@
                         <div class="modal-head"><h3 id="close-{{ $st }}-title">{{ $ttl }}</h3><button type="button" class="btn btn-ghost btn-icon" data-modal-close aria-label="Tutup"><x-icon name="x" :size="18" /></button></div>
                         <div class="modal-body" style="display:grid;gap:14px">
                             <p class="muted text-sm" style="margin:0">Catatan ini dikirim ke <strong>{{ $report->reporter_name }}</strong>{{ $report->user?->waNumber() ? ' (juga lewat WhatsApp)' : '' }}.</p>
+                            @php $quick = $report->team->noteTemplates()[$st] ?? []; @endphp
+                            @if ($quick)
+                                <div class="quick-notes" data-quick-target="close-note-{{ $st }}" aria-label="Catatan cepat">
+                                    @foreach ($quick as $q)<button type="button" class="quick-note" data-quick-note="{{ $q }}">{{ $q }}</button>@endforeach
+                                </div>
+                            @endif
                             <x-textarea name="close_note" id="close-note-{{ $st }}" :label="$lbl" rows="4" maxlength="3000" required :placeholder="$ph" :value="old('status') === $st ? old('close_note') : null" />
                             @if ($st === 'selesai')
                                 <div class="field">

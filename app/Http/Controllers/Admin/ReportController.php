@@ -52,7 +52,7 @@ class ReportController extends Controller
     {
         $this->authorize('view', $report);
 
-        $report->load(['team', 'category', 'item.location', 'item.category', 'location', 'assignee', 'user', 'attachments']);
+        $report->load(['team', 'category', 'assignee', 'user', 'attachments']);
 
         $activities = $report->activities()->with('user')->get();
 
@@ -64,11 +64,13 @@ class ReportController extends Controller
             ->with(['categories' => fn ($q) => $q->where('is_active', true)])->get()
             ->filter(fn ($t) => $t->categories->isNotEmpty())->values();
 
-        $history = $report->inventory_item_id
-            ? Report::where('inventory_item_id', $report->inventory_item_id)->where('id', '!=', $report->id)->latest()->take(5)->get(['id', 'report_number', 'title', 'status', 'created_at'])
+        $history = $report->asset_id
+            ? Report::where('asset_id', $report->asset_id)->where('id', '!=', $report->id)->latest()->take(5)->get(['id', 'report_number', 'title', 'status', 'created_at'])
             : collect();
 
-        return view('admin.reports.show', compact('report', 'activities', 'staff', 'otherTeams', 'history'));
+        $assetUrl = $report->asset_id ? app(\App\Services\InventoryClient::class)->assetWebUrl($report->asset_id) : null;
+
+        return view('admin.reports.show', compact('report', 'activities', 'staff', 'otherTeams', 'history', 'assetUrl'));
     }
 
     public function update(Request $request, Report $report): RedirectResponse
@@ -292,7 +294,7 @@ class ReportController extends Controller
     {
         $this->authorize('view', $report);
 
-        $report->load(['team', 'category', 'item', 'location', 'assignee', 'user']);
+        $report->load(['team', 'category', 'assignee', 'user']);
         $activities = $report->activities()->with('user')->where('is_internal', false)->get();
 
         return view('admin.reports.print', compact('report', 'activities'));
@@ -300,10 +302,10 @@ class ReportController extends Controller
 
     public function export(Request $request): BinaryFileResponse
     {
-        $query = $this->query($request)->with(['team', 'category', 'assignee', 'location', 'item'])->latest();
+        $query = $this->query($request)->with(['team', 'category', 'assignee'])->latest();
 
         $rows = [array_map(fn ($h) => ['v' => $h, 's' => 'head'], [
-            'No. Laporan', 'Dibuat', 'Regu', 'Kategori', 'Judul', 'Pelapor', 'Lokasi', 'Kode Inventaris',
+            'No. Laporan', 'Dibuat', 'Regu', 'Kategori', 'Judul', 'Pelapor', 'Lokasi', 'Kode Barang',
             'Prioritas', 'Status', 'Penanggung Jawab', 'Respons Pertama', 'Selesai', 'Durasi (jam kerja)', 'Dibuka Ulang', 'Catatan Penanganan',
         ])];
         foreach ($query->cursor() as $r) {
@@ -314,8 +316,8 @@ class ReportController extends Controller
                 $r->categoryDisplayName(),
                 $r->title,
                 $r->reporter_name,
-                $r->location->name ?? '',
-                $r->item->code ?? '',
+                $r->location_name ?? '',
+                $r->asset_code ?? '',
                 $r->priorityLabel(),
                 $r->statusLabel(),
                 $r->assignee->name ?? '',

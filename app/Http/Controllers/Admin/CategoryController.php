@@ -70,6 +70,25 @@ class CategoryController extends Controller
         return $data;
     }
 
+    /** Template catatan cepat (satu per baris) untuk popup Selesaikan / Tolak. */
+    public function templates(Request $request, Team $team): RedirectResponse
+    {
+        $this->authorizeLead($team->id);
+
+        $data = $request->validate([
+            'selesai' => ['nullable', 'string', 'max:3000'],
+            'ditolak' => ['nullable', 'string', 'max:3000'],
+        ]);
+        $lines = fn (?string $v) => collect(preg_split('/\R/', (string) $v))
+            ->map(fn ($l) => trim($l))->filter()->unique()->take(8)
+            ->map(fn ($l) => mb_substr($l, 0, 300))->values()->all();
+
+        $team->update(['note_templates' => ['selesai' => $lines($data['selesai'] ?? ''), 'ditolak' => $lines($data['ditolak'] ?? '')]]);
+        Audit::log('team.templates', "Mengubah template catatan regu {$team->name}.", $team);
+
+        return back()->with('success', 'Template catatan disimpan.');
+    }
+
     private function authorizeLead(?int $teamId): void
     {
         abort_unless($teamId && auth()->user()->leadsTeam($teamId), 403, 'Hanya Kepala Regu atau Superadmin yang dapat mengelola kategori.');

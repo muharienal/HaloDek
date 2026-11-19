@@ -1,4 +1,9 @@
 @props(['activities', 'viewer'])
+@php
+    // Catatan yang sudah tampil di kartu "Hasil Penyelesaian"/"Alasan Penolakan" tidak diulang di riwayat.
+    $hideNote = $hideNote ?? null;
+    $hideId = $hideNote ? optional($activities->filter(fn ($x) => ($x->meta['note'] ?? null) === $hideNote)->last())->id : null;
+@endphp
 <ul class="timeline">
     @foreach ($activities as $a)
         @php
@@ -17,7 +22,7 @@
                 <div class="bubble {{ $a->is_internal ? 'internal' : ($mine ? 'mine' : '') }} pre-line">{{ $a->message }}</div>
             @else
                 <div class="text-sm muted mt-1">{{ $a->message }}</div>
-                @if (! empty($a->meta['note']))<div class="bubble pre-line text-sm">{{ $a->meta['note'] }}</div>@endif
+                @if (! empty($a->meta['note']) && $a->id !== $hideId)<div class="bubble pre-line text-sm">{{ $a->meta['note'] }}</div>@endif
             @endif
         </li>
     @endforeach

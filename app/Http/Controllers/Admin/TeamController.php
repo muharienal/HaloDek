@@ -29,7 +29,7 @@ class TeamController extends Controller
             ->when(! $user->isSuperadmin(), fn ($q) => $q->whereIn('id', $user->handledTeamIds() ?: [0]))
             ->with('head')
             ->withCount([
-                'users', 'categories', 'inventoryItems', 'reports',
+                'users', 'categories', 'reports',
                 'reports as open_reports_count' => fn ($q) => $q->whereIn('status', ['menunggu', 'diproses']),
             ])
             ->ordered()

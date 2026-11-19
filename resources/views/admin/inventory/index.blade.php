@@ -25,6 +25,7 @@
             @endif
         </div>
         <div class="flex gap-2 wrap">
+            <a class="btn btn-secondary btn-sm" href="{{ route('admin.inventory.qr', array_filter(['team_id' => $team->id, 'category' => $category?->id, 'status' => $status !== 'semua' ? $status : null, 'q' => $search ?: null])) }}" target="_blank" rel="noopener" title="Cetak stiker QR untuk barang yang sedang ditampilkan"><x-icon name="qr" :size="16" /> Cetak QR</a>
             <a class="btn btn-secondary btn-sm" href="{{ route('admin.inventory.export', ['team_id' => $team->id]) }}"><x-icon name="download" :size="16" /> Ekspor</a>
             <button class="btn btn-secondary btn-sm" data-modal-open="import-modal"><x-icon name="upload" :size="16" /> Impor CSV</button>
             <button class="btn btn-primary btn-sm" data-modal-open="inv-item-modal" @if ($category) data-fill="{{ json_encode(['inventory_category_id' => $category->id, 'status' => 'tersedia', 'team_id' => $team->id]) }}" @endif><x-icon name="plus" :size="16" /> Tambah Item</button>

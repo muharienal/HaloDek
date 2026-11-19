@@ -126,7 +126,6 @@ class WorkflowTest extends TestCase
     public function test_employee_cannot_open_admin_pages(): void
     {
         $this->actingAs($this->emp)->get(route('admin.reports.index'))->assertForbidden();
-        $this->actingAs($this->emp)->get(route('admin.inventory.index'))->assertForbidden();
     }
 
     public function test_dashboards_render_for_every_role(): void

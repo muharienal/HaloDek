@@ -12,6 +12,14 @@ use Illuminate\Support\Carbon;
 /** Item inventaris: barang, ruangan, lisensi, atau apa pun yang dicatat sebuah regu. */
 class InventoryItem extends Model
 {
+    /** Alamat yang ditanam di QR stiker barang: membuka form lapor terisi otomatis. */
+    public function scanUrl(): string
+    {
+        $base = rtrim((string) (config('halodek.qr_base_url') ?: url('/')), '/');
+
+        return $base.'/q/'.$this->id;
+    }
+
     use HasFactory;
 
     protected $fillable = [

@@ -21,6 +21,7 @@ return [
     //  - karyawan    : pelapor (masuk cukup dengan NIK).
     'roles' => [
         'superadmin' => 'Superadmin',
+        'manajer' => 'Manajer',
         'kepala_regu' => 'Kepala Regu',
         'staf' => 'Staf Regu',
         'karyawan' => 'Karyawan',
@@ -68,17 +69,30 @@ return [
     'auto_reminder' => (bool) env('HALODEK_PENGINGAT_OTOMATIS', true),
     'reminder_every_minutes' => 15,
 
+    // Pembersihan otomatis sekali sehari (juga tanpa Task Scheduler). Satuan: hari.
+    'auto_maintenance' => (bool) env('HALODEK_PEMBERSIHAN_OTOMATIS', true),
+    'retention' => [
+        'notifications_read_days' => 90,    // notifikasi yang sudah dibaca
+        'notifications_unread_days' => 180, // notifikasi yang tidak pernah dibaca
+        'audit_days' => 365,                // log audit
+    ],
+
+    // Template catatan cepat bawaan (popup Selesaikan / Tolak). Tiap regu bisa mengubahnya di menu Regu.
+    'note_templates' => [
+        'selesai' => [
+            'Sudah diperbaiki, silakan dicek kembali.',
+            'Sudah diganti dengan yang baru.',
+            'Sudah ditangani di lokasi. Hubungi kami bila terulang.',
+        ],
+        'ditolak' => [
+            'Permintaan ini perlu persetujuan atasan terlebih dahulu.',
+            'Di luar wewenang regu kami, silakan ajukan ke regu yang sesuai.',
+            'Laporan ganda, sudah ditangani di laporan lain.',
+        ],
+    ],
+
     // Pelapor boleh membuka kembali laporan selesai paling lama sekian hari setelah diselesaikan.
     'reopen_days' => 7,
-
-    // Status item inventaris.
-    'item_statuses' => [
-        'digunakan' => ['label' => 'Digunakan', 'tone' => 'blue'],
-        'tersedia' => ['label' => 'Tersedia', 'tone' => 'green'],
-        'rusak' => ['label' => 'Rusak', 'tone' => 'red'],
-        'perbaikan' => ['label' => 'Perbaikan', 'tone' => 'amber'],
-        'non-aktif' => ['label' => 'Non-aktif', 'tone' => 'gray'],
-    ],
 
     // Palet warna regu (nama => hex). Dipakai untuk badge, kartu, dan grafik.
     'team_colors' => [

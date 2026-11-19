@@ -75,9 +75,9 @@
                     <div><div class="text-xs muted">Kategori</div><div>{{ $report->categoryDisplayName() }}</div></div>
                     <div><div class="text-xs muted">Diajukan</div><div>{{ $report->created_at->translatedFormat('d M Y, H:i') }}</div></div>
                     <div><div class="text-xs muted">Penanggung jawab</div><div>@if ($report->assignee)<span class="strong">{{ $report->assignee->name }}</span> <span class="muted">· {{ $report->assignee->roleLabel() }}</span>@else<span class="badge tone-amber plain">Belum ditugaskan</span>@endif</div></div>
-                    @if ($report->resolved_at)<div><div class="text-xs muted">Selesai</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionHours() }} jam kerja)</span></div></div>@endif
-                    @if ($report->location)<div><div class="text-xs muted">Lokasi</div><div>{{ $report->location->fullName() }}</div></div>@endif
-                    @if ($report->item)<div><div class="text-xs muted">Inventaris terkait</div><div>{{ $report->item->label() }}</div></div>@endif
+                    @if ($report->resolved_at)<div><div class="text-xs muted">Selesai</div><div>{{ $report->resolved_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->resolutionText() }})</span></div></div>@endif
+                    @if ($report->location_name)<div><div class="text-xs muted">Lokasi</div><div>{{ $report->location_name }}</div></div>@endif
+                    @if ($report->assetLabel())<div><div class="text-xs muted">Barang terkait</div><div>{{ $report->assetLabel() }}</div></div>@endif
                 </div>
             </div>
 
@@ -98,7 +98,7 @@
     </div>
 </main>
 
-<footer class="footer">© {{ date('Y') }} IT {{ config('halodek.company') }}</footer>
+<footer class="footer">IT {{ config('halodek.company') }} © {{ date('Y') }}</footer>
 <script src="{{ asset('js/halodek.js') }}?v={{ filemtime(public_path('js/halodek.js')) }}"></script>
 </body>
 </html>

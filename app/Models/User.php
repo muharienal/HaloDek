@@ -15,22 +15,30 @@ class User extends Authenticatable
     use HasFactory;
 
     public const ROLE_SUPERADMIN = 'superadmin';
+    public const ROLE_MANAJER = 'manajer';
     public const ROLE_KEPALA_REGU = 'kepala_regu';
     public const ROLE_STAF = 'staf';
     public const ROLE_KARYAWAN = 'karyawan';
 
-    /** Role pengelola (punya akses area admin). Karyawan hanya melapor. */
+    /**
+     * Role pengelola (punya akses area admin, masuk dengan NIK + password). Karyawan hanya melapor.
+     * Manajer = supervisi: melihat semua regu tanpa menangani laporan.
+     */
     public const ADMIN_ROLES = [
         self::ROLE_SUPERADMIN,
+        self::ROLE_MANAJER,
         self::ROLE_KEPALA_REGU,
         self::ROLE_STAF,
     ];
+
+    /** Role yang menangani laporan (mengambil, membalas, menyelesaikan). */
+    public const ACT_ROLES = [self::ROLE_SUPERADMIN, self::ROLE_KEPALA_REGU, self::ROLE_STAF];
 
     /** Role yang wajib terikat ke satu regu. */
     public const TEAM_ROLES = [self::ROLE_KEPALA_REGU, self::ROLE_STAF];
 
     protected $fillable = [
-        'nik', 'name', 'email', 'phone', 'department', 'position',
+        'nik', 'name', 'phone', 'department', 'position',
         'role', 'team_id', 'password', 'must_change_password', 'is_active', 'last_login_at',
     ];
 
@@ -83,11 +91,6 @@ class User extends Authenticatable
         return $this->hasMany(UserNotification::class);
     }
 
-    public function heldItems(): HasMany
-    {
-        return $this->hasMany(InventoryItem::class, 'holder_id');
-    }
-
     // ------------------------------------------------------------- password
 
     /** Password sementara acak (12 karakter, huruf + angka, tanpa karakter yang mirip). */
@@ -117,6 +120,17 @@ class User extends Authenticatable
     public function isSuperadmin(): bool
     {
         return $this->role === self::ROLE_SUPERADMIN;
+    }
+
+    public function isManajer(): bool
+    {
+        return $this->role === self::ROLE_MANAJER;
+    }
+
+    /** Boleh menangani laporan & mengubah data (semua pengelola kecuali manajer supervisi). */
+    public function canAct(): bool
+    {
+        return in_array($this->role, self::ACT_ROLES, true);
     }
 
     public function isHead(): bool
@@ -163,7 +177,7 @@ class User extends Authenticatable
 
     /**
      * ID regu yang boleh ditangani user ini.
-     * Superadmin = semua regu, Kepala Regu/Staf = regunya sendiri, karyawan = tidak ada.
+     * Superadmin & Manajer = semua regu, Kepala Regu/Staf = regunya sendiri, karyawan = tidak ada.
      */
     public function handledTeamIds(): array
     {
@@ -171,7 +185,7 @@ class User extends Authenticatable
             return $this->handledTeamIds;
         }
 
-        if ($this->isSuperadmin()) {
+        if ($this->isSuperadmin() || $this->isManajer()) {
             return $this->handledTeamIds = Team::pluck('id')->all();
         }
 

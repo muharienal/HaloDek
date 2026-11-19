@@ -46,17 +46,8 @@ class InventoryController extends Controller
         $categories = $team->inventoryCategories()->withCount('items')->get();
         $category = $categories->firstWhere('id', $request->integer('category'));
 
-        $items = InventoryItem::with(['category', 'holder', 'location'])
-            ->where('team_id', $team->id)
-            ->when($category, fn ($q) => $q->where('inventory_category_id', $category->id))
-            ->when($status === 'jatuh-tempo', fn ($q) => $q->dueSoon())
-            ->when(! in_array($status, ['semua', 'jatuh-tempo'], true), fn ($q) => $q->where('status', $status))
-            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
-                ->where('code', 'like', "%{$search}%")
-                ->orWhere('name', 'like', "%{$search}%")
-                ->orWhereHas('holder', fn ($h) => $h->where('name', 'like', "%{$search}%")->orWhere('nik', 'like', "%{$search}%"))
-                ->orWhereHas('location', fn ($l) => $l->where('name', 'like', "%{$search}%"))))
-            ->orderBy('code')
+        $items = $this->itemQuery($team, $category, $status, $search)
+            ->with(['category', 'holder', 'location'])
             ->paginate(config('halodek.per_page'))
             ->withQueryString();
 
@@ -70,6 +61,32 @@ class InventoryController extends Controller
         ));
     }
 
+    /**
+     * Lembar stiker QR siap cetak: satu barang (?item=) atau daftar yang sedang difilter
+     * (regu, kategori, status, pencarian). Maks. 300 stiker sekali cetak.
+     */
+    public function qr(Request $request): View
+    {
+        if ($id = $request->integer('item')) {
+            $item = InventoryItem::with(['location', 'team'])->findOrFail($id);
+            $this->authorizeTeam($item->team_id);
+            $items = collect([$item]);
+            $title = $item->code.' · '.$item->name;
+        } else {
+            $team = $this->handledTeams()->firstWhere('id', $request->integer('team_id'));
+            abort_unless($team, 403, 'Anda tidak menangani regu ini.');
+            $category = $team->inventoryCategories()->find($request->integer('category'));
+            $items = $this->itemQuery($team, $category, $request->query('status', 'semua'), trim((string) $request->query('q')))
+                ->where('status', '!=', 'non-aktif')
+                ->with(['location', 'team'])->limit(300)->get();
+            $title = 'Regu '.$team->name.($category ? ' · '.$category->name : '');
+        }
+
+        $base = rtrim((string) (config('halodek.qr_base_url') ?: url('/')), '/');
+
+        return view('admin.inventory.qr', compact('items', 'title', 'base'));
+    }
+
     public function show(InventoryItem $item): View
     {
         $this->authorizeTeam($item->team_id);
@@ -78,6 +95,22 @@ class InventoryController extends Controller
         $reports = $item->reports()->with(['category', 'team'])->latest()->paginate(10);
 
         return view('admin.inventory.show', compact('item', 'reports'));
+    }
+
+    /** Query daftar barang sesuai filter halaman Inventaris (dipakai daftar & cetak QR). */
+    private function itemQuery(Team $team, ?InventoryCategory $category, string $status, string $search)
+    {
+        return InventoryItem::query()
+            ->where('team_id', $team->id)
+            ->when($category, fn ($q) => $q->where('inventory_category_id', $category->id))
+            ->when($status === 'jatuh-tempo', fn ($q) => $q->dueSoon())
+            ->when(! in_array($status, ['semua', 'jatuh-tempo'], true), fn ($q) => $q->where('status', $status))
+            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
+                ->where('code', 'like', "%{$search}%")
+                ->orWhere('name', 'like', "%{$search}%")
+                ->orWhereHas('holder', fn ($h) => $h->where('name', 'like', "%{$search}%")->orWhere('nik', 'like', "%{$search}%"))
+                ->orWhereHas('location', fn ($l) => $l->where('name', 'like', "%{$search}%"))))
+            ->orderBy('code');
     }
 
     // --------------------------------------------------------------- kategori

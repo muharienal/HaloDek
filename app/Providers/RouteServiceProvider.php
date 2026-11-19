@@ -39,9 +39,12 @@ class RouteServiceProvider extends ServiceProvider
         RateLimiter::for('password', fn (Request $r) => Limit::perMinute(5)->by('p|'.$user($r)));
         // Ekspor & impor massal.
         RateLimiter::for('bulk', fn (Request $r) => Limit::perMinute(6)->by('b|'.$user($r)));
+        // API antar-aplikasi (Inventaris).
+        RateLimiter::for('api', fn (Request $r) => Limit::perMinute(120)->by('api|'.$r->ip()));
 
         $this->routes(function () {
             Route::middleware('web')->group(base_path('routes/web.php'));
+            Route::middleware('api')->prefix('api/v1')->name('api.')->group(base_path('routes/api.php'));
         });
     }
 }

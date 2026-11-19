@@ -78,15 +78,21 @@ class SecurityTest extends TestCase
         $this->actingAs($su)->post(route('admin.users.reset-password', $emp))->assertSessionHas('error');
     }
 
-    public function test_weak_new_password_is_rejected(): void
+    public function test_new_password_rules_are_lenient(): void
     {
         $staf = $this->user(User::ROLE_STAF, 'it', ['password' => 'LamaAman123']);
 
-        foreach (['pendek1A', 'semuahurufkecil1', 'SEMUAHURUFBESAR1'] as $weak) {
+        // Terlalu pendek, sama dengan password lama, atau konfirmasi beda: ditolak.
+        foreach ([['abc12', 'abc12'], ['LamaAman123', 'LamaAman123'], ['bebasaja', 'beda']] as [$pw, $confirm]) {
             $this->actingAs($staf)->put(route('profile.password'), [
-                'current_password' => 'LamaAman123', 'password' => $weak, 'password_confirmation' => $weak,
+                'current_password' => 'LamaAman123', 'password' => $pw, 'password_confirmation' => $confirm,
             ])->assertSessionHasErrors('password');
         }
+
+        // Selebihnya bebas (tanpa wajib huruf besar/angka).
+        $this->actingAs($staf)->put(route('profile.password'), [
+            'current_password' => 'LamaAman123', 'password' => 'bebasaja', 'password_confirmation' => 'bebasaja',
+        ])->assertSessionHasNoErrors();
     }
 
     public function test_attachments_require_access_and_are_served_safely(): void
@@ -181,7 +187,7 @@ class SecurityTest extends TestCase
     public function test_profile_update_cannot_change_role(): void
     {
         $emp = $this->user();
-        $this->actingAs($emp)->put(route('profile.update'), ['email' => 'a@b.co', 'role' => 'superadmin', 'is_active' => 0, 'team_id' => 1])->assertRedirect();
+        $this->actingAs($emp)->put(route('profile.update'), ['phone' => '081234567890', 'role' => 'superadmin', 'is_active' => 0, 'team_id' => 1])->assertRedirect();
 
         $this->assertSame('karyawan', $emp->fresh()->role);
         $this->assertNull($emp->fresh()->team_id);

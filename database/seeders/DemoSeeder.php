@@ -4,8 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\Announcement;
 use App\Models\Category;
-use App\Models\InventoryItem;
-use App\Models\Location;
 use App\Models\Report;
 use App\Models\Team;
 use App\Models\User;
@@ -61,39 +59,17 @@ class DemoSeeder extends Seeder
             ['00009', 'Dewi Lestari', 'Produksi'], ['00010', 'Rizky Pratama', 'Operasional'],
         ])->map(fn ($r) => UserSeeder::make($r[0], $r[1], User::ROLE_KARYAWAN, $r[2], 'Karyawan', null, false));
 
-        // ---- lokasi
+        // ---- lokasi & barang ada di aplikasi Inventaris. Di sini hanya salinan nama yang cocok dengan
+        //      data demo Inventaris (ID lokasi 1-7; laptop karyawan = aset ID 1-5 sesuai urutan karyawan).
         $locs = collect([
-            ['Ruang Rapat Utama', 'Gedung A', '2'], ['Ruang Finance', 'Gedung A', '1'], ['Ruang HRD', 'Gedung A', '1'],
-            ['Ruang Server', 'Gedung A', '1'], ['Workshop Produksi', 'Gedung B', '1'], ['Lobby & Resepsionis', 'Gedung A', '1'], ['Gudang', 'Gedung C', '1'],
-        ])->map(fn ($r) => Location::firstOrCreate(['name' => $r[0]], ['building' => $r[1], 'floor' => $r[2]]));
-
-        // ---- inventaris per regu
+            'Ruang Rapat Utama (Gedung A, Lt. 2)', 'Ruang Finance (Gedung A, Lt. 1)', 'Ruang HRD (Gedung A, Lt. 1)',
+            'Ruang Server (Gedung A, Lt. 1)', 'Workshop Produksi (Gedung B, Lt. 1)', 'Lobby & Resepsionis (Gedung A, Lt. 1)', 'Gudang (Gedung C, Lt. 1)',
+        ])->map(fn ($name, $i) => ['id' => $i + 1, 'label' => $name]);
         $team = fn (string $slug) => Team::where('slug', $slug)->first();
-        $cat = fn (string $slug, string $name) => $team($slug)->inventoryCategories()->where('name', $name)->first();
-        $item = function (string $slug, string $catName, string $code, string $name, array $extra = []) use ($team, $cat) {
-            return InventoryItem::firstOrCreate(['team_id' => $team($slug)->id, 'code' => $code], [
-                'inventory_category_id' => $cat($slug, $catName)->id, 'name' => $name, 'status' => 'tersedia',
-            ] + $extra);
-        };
-
-        foreach ($staff as $i => $u) {
-            $item('it', 'Laptop & PC', sprintf('AST-%04d', 100 + $i), ['Lenovo ThinkPad E14', 'ASUS Vivobook', 'HP ProBook 440', 'Dell Latitude 3420', 'Acer Aspire 5'][$i % 5], [
-                'status' => 'digunakan', 'holder_id' => $u->id, 'location_id' => $locs[$i % 4]->id,
-                'acquired_at' => now()->subMonths(10 + $i * 3)->toDateString(), 'due_date' => now()->addMonths(14 - $i * 3)->toDateString(), 'note' => 'Garansi',
-            ]);
-        }
-        $item('it', 'Printer & Scanner', 'AST-0200', 'Epson L3250', ['location_id' => $locs[1]->id]);
-        $item('it', 'Software', 'SW-001', 'Microsoft 365 Business (50 lisensi)', ['status' => 'digunakan', 'due_date' => now()->addMonths(8)->toDateString(), 'note' => '42 dari 50 lisensi terpakai']);
-        $item('it', 'Software', 'SW-002', 'Antivirus Endpoint (60 lisensi)', ['status' => 'digunakan', 'due_date' => now()->addDays(18)->toDateString(), 'note' => '58 dari 60 lisensi terpakai']);
-        $item('it', 'Akses & Lisensi', 'AKS-001', 'VPN Perusahaan — Budi Santoso', ['status' => 'digunakan', 'holder_id' => $staff[0]->id, 'due_date' => now()->addDays(25)->toDateString()]);
-        $item('sarpras', 'AC', 'SP-AC-001', 'Daikin 2 PK', ['location_id' => $locs[0]->id, 'due_date' => now()->addDays(9)->toDateString(), 'note' => 'Servis berkala 6 bulan']);
-        $item('sarpras', 'AC', 'SP-AC-002', 'Panasonic 1 PK', ['location_id' => $locs[2]->id, 'due_date' => now()->addDays(60)->toDateString()]);
-        $item('sarpras', 'Kendaraan', 'SP-KND-001', 'Toyota Hiace B 1234 XY', ['status' => 'digunakan', 'location_id' => $locs[6]->id, 'due_date' => now()->addDays(20)->toDateString(), 'note' => 'Servis & pajak']);
-        $item('sarpras', 'Ruangan', 'RG-001', 'Ruang Rapat Utama', ['location_id' => $locs[0]->id, 'note' => 'Kapasitas 20 orang']);
-        $item('kesekretariatan', 'Ruang Rapat', 'KS-RR-01', 'Ruang Rapat Kecil Lt. 1', ['location_id' => $locs[2]->id]);
-        $item('kesekretariatan', 'Perlengkapan Kantor', 'KS-ATK-01', 'Stok kertas A4 (rim)', ['note' => 'Minimal stok 20 rim']);
-        $item('keamanan', 'APAR & Pemadam', 'KM-APAR-01', 'APAR Powder 6 kg — Workshop', ['location_id' => $locs[4]->id, 'due_date' => now()->addDays(5)->toDateString(), 'note' => 'Isi ulang tahunan']);
-        $item('keamanan', 'CCTV', 'KM-CCTV-01', 'CCTV Lobby', ['status' => 'digunakan', 'location_id' => $locs[5]->id]);
+        $laptops = ['Lenovo ThinkPad E14 Gen 5', 'ASUS Vivobook 14', 'HP ProBook 440 G10', 'Dell Latitude 3420', 'Acer Aspire 5'];
+        $laptopOf = fn (User $u) => ($idx = $staff->search(fn ($s) => $s->id === $u->id)) === false ? [] : [
+            'asset_id' => $idx + 1, 'asset_code' => sprintf('AST-%04d', 100 + $idx), 'asset_name' => $laptops[$idx],
+        ];
 
         // ---- pengumuman
         $super = User::where('nik', '00001')->first();
@@ -109,10 +85,10 @@ class DemoSeeder extends Seeder
         if (Report::withTrashed()->exists()) {
             return;
         }
-        $this->seedReports($staff, $heads, $crew, $locs);
+        $this->seedReports($staff, $heads, $crew, $locs, $laptopOf);
     }
 
-    private function seedReports($staff, array $heads, array $crew, $locs): void
+    private function seedReports($staff, array $heads, array $crew, $locs, \Closure $laptopOf): void
     {
         $service = app(ReportService::class);
         mt_srand(42);
@@ -162,9 +138,9 @@ class DemoSeeder extends Seeder
 
                 $report = $service->create($user, $team, $category, [
                     'title' => $title, 'description' => $desc, 'priority' => $priorities[$i % 5],
-                    'location_id' => $locs[$i % $locs->count()]->id,
-                    'inventory_item_id' => ($slug === 'it' && $catName === 'Komputer & Laptop') ? $user->heldItems()->value('id') : null,
-                ]);
+                    'inventory_location_id' => $locs[$i % $locs->count()]['id'],
+                    'location_name' => $locs[$i % $locs->count()]['label'],
+                ] + (($slug === 'it' && $catName === 'Komputer & Laptop') ? $laptopOf($user) : []));
 
                 // Geser waktu ke masa lalu agar grafik tren terlihat hidup.
                 $report->forceFill(['created_at' => $createdAt, 'updated_at' => $createdAt])->saveQuietly();

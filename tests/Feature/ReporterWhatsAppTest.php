@@ -131,11 +131,11 @@ class ReporterWhatsAppTest extends TestCase
         $this->get(route('profile.edit'))->assertSee('class="wa-chip"', false)->assertSee('id="wa-modal"', false);
 
         // Simpan lewat profil: otomatis 62.
-        $this->put(route('profile.update'), ['email' => '', 'phone' => '0812-3456-7890'])->assertSessionHasNoErrors();
+        $this->put(route('profile.update'), ['phone' => '0812-3456-7890'])->assertSessionHasNoErrors();
         $this->assertSame('6281234567890', $emp->fresh()->phone);
         $this->get(route('dashboard'))->assertDontSee('class="wa-chip"', false);
 
-        $this->put(route('profile.update'), ['email' => '', 'phone' => 'abc'])->assertSessionHasErrors('phone');
+        $this->put(route('profile.update'), ['phone' => 'abc'])->assertSessionHasErrors('phone');
 
         // Admin yang mengisi nomor pengguna juga ternormalisasi.
         $u = $this->user(User::ROLE_KARYAWAN, null, ['phone' => '083111200037']);

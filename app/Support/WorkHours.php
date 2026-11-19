@@ -75,6 +75,20 @@ class WorkHours
             && ! in_array($day->toDateString(), $cfg['holidays'] ?? [], true);
     }
 
+    /** Durasi untuk tampilan: "kurang dari 1 jam kerja" atau "6.5 jam kerja". */
+    public static function human(?int $minutes): string
+    {
+        if ($minutes === null) {
+            return '–';
+        }
+        if ($minutes < 60) {
+            return 'kurang dari 1 jam kerja';
+        }
+        $h = round($minutes / 60, 1);
+
+        return ($h == (int) $h ? (int) $h : $h).' jam kerja';
+    }
+
     /** Teks singkat untuk tampilan, mis. "Sen–Jum 07.00–16.00". */
     public static function label(): string
     {

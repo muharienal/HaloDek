@@ -4,8 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Announcement;
 use App\Models\Category;
-use App\Models\InventoryCategory;
-use App\Models\InventoryItem;
 use App\Models\Report;
 use App\Models\Team;
 use App\Models\User;
@@ -37,8 +35,8 @@ class DashboardController extends Controller
             'lainnya' => ($counts['ditolak'] ?? 0) + ($counts['dibatalkan'] ?? 0),
         ];
 
-        $teams = Team::active()->ordered()->withCount(['categories' => fn ($q) => $q->where('is_active', true)])->get()
-            ->filter(fn ($t) => $t->categories_count > 0);
+        $teams = Team::active()->ordered()->with(['categories' => fn ($q) => $q->where('is_active', true)])->get()
+            ->filter(fn ($t) => $t->categories->isNotEmpty())->values();
 
         $recent = Report::with(['team', 'category'])->where('user_id', $user->id)->latest()->take(5)->get();
 
@@ -98,13 +96,13 @@ class DashboardController extends Controller
 
         $workload = $user->isStaf() ? collect() : $this->workload($user, $teamIds);
 
-        $inventory = $this->inventory($teamIds);
+        $topAssets = $this->topAssets($teamIds);
 
         $announcements = $this->announcementsFor($user);
 
         return view('dashboard.admin', compact(
             'teams', 'stats', 'overdue', 'todo', 'trend', 'byCategory', 'byTeam', 'recent',
-            'workload', 'inventory', 'announcements'
+            'workload', 'topAssets', 'announcements'
         ));
     }
 
@@ -150,18 +148,16 @@ class DashboardController extends Controller
             ->map(fn ($u) => ['user' => $u, 'open' => (int) $u->open_tasks]);
     }
 
-    /** Ringkasan inventaris regu yang ditangani. */
-    private function inventory(array $teamIds): array
+    /**
+     * Barang yang paling sering dilaporkan 90 hari terakhir (dari salinan data barang di laporan),
+     * sebagai petunjuk barang yang perlu diganti/diservis. Data aset lengkap ada di aplikasi Inventaris.
+     */
+    private function topAssets(array $teamIds): Collection
     {
-        $items = InventoryItem::whereIn('team_id', $teamIds);
-        $cats = InventoryCategory::whereIn('team_id', $teamIds)->withCount('items')->orderByDesc('items_count')->take(6)->get();
-
-        return [
-            'by_category' => $cats->pluck('items_count', 'name'),
-            'total' => (clone $items)->count(),
-            'broken' => (clone $items)->whereIn('status', ['rusak', 'perbaikan'])->count(),
-            'due' => (clone $items)->dueSoon()->count(),
-        ];
+        return Report::whereIn('team_id', $teamIds)->whereNotNull('asset_id')
+            ->where('created_at', '>=', now()->subDays(90))
+            ->selectRaw('asset_id, MAX(asset_code) as code, MAX(asset_name) as name, COUNT(*) as total, SUM(CASE WHEN status IN (\'menunggu\', \'diproses\') THEN 1 ELSE 0 END) as open_count')
+            ->groupBy('asset_id')->orderByDesc('total')->take(5)->get();
     }
 
     private function announcementsFor(User $user): Collection

@@ -20,7 +20,7 @@ class Report extends Model
 
     protected $fillable = [
         'report_number', 'user_id', 'reporter_name', 'team_id', 'category_id', 'custom_category',
-        'inventory_item_id', 'location_id', 'assigned_to_id', 'title', 'description', 'priority', 'status',
+        'asset_id', 'asset_code', 'asset_name', 'inventory_location_id', 'location_name', 'assigned_to_id', 'title', 'description', 'priority', 'status',
         'follow_up_note', 'first_response_at', 'resolved_at',
     ];
 
@@ -33,6 +33,19 @@ class Report extends Model
 
     protected static function booted(): void
     {
+        // Laporan dihapus (soft delete, nomor tetap tercatat agar tidak dipakai ulang):
+        // foto/lampirannya ikut dihapus dari disk karena tidak ada menu pemulihan.
+        static::deleted(function (Report $r) {
+            $r->attachments()->get()->each->delete();
+        });
+
+        // Laporan yang terkait barang dikabarkan ke Inventaris (riwayat aset) saat dibuat / berganti status.
+        static::saved(function (Report $r) {
+            if ($r->asset_id && ($r->wasRecentlyCreated || $r->wasChanged(['status', 'title', 'asset_id']))) {
+                app(\App\Services\InventoryClient::class)->pushReportLater($r);
+            }
+        });
+
         // Durasi jam kerja dihitung sekali saat waktunya berubah, agar statistik cukup AVG() di database.
         static::saving(function (Report $r) {
             $created = $r->created_at ?? now();
@@ -62,16 +75,6 @@ class Report extends Model
         return $this->belongsTo(Category::class);
     }
 
-    public function item(): BelongsTo
-    {
-        return $this->belongsTo(InventoryItem::class, 'inventory_item_id');
-    }
-
-    public function location(): BelongsTo
-    {
-        return $this->belongsTo(Location::class);
-    }
-
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to_id');
@@ -85,6 +88,16 @@ class Report extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(ReportAttachment::class);
+    }
+
+    /** Barang terkait (salinan dari Inventaris saat laporan dibuat), mis. "IT-LPT-001 · Laptop Lenovo". */
+    public function assetLabel(): ?string
+    {
+        if (! $this->asset_id && blank($this->asset_name)) {
+            return null;
+        }
+
+        return trim(($this->asset_code ? $this->asset_code.' · ' : '').$this->asset_name, ' ·') ?: null;
     }
 
     // ---------------------------------------------------------------- scopes
@@ -163,6 +176,18 @@ class Report extends Model
         $minutes = $this->resolve_work_minutes ?? WorkHours::minutesBetween($this->created_at, $this->resolved_at);
 
         return round($minutes / 60, 1);
+    }
+
+    /** Lama penyelesaian untuk tampilan, mis. "kurang dari 1 jam kerja". */
+    public function resolutionText(): string
+    {
+        return $this->resolved_at ? WorkHours::human($this->resolve_work_minutes ?? WorkHours::minutesBetween($this->created_at, $this->resolved_at)) : '–';
+    }
+
+    /** Lama sampai respons pertama untuk tampilan (jam kerja). */
+    public function responseText(): string
+    {
+        return $this->first_response_at ? WorkHours::human($this->respond_work_minutes ?? WorkHours::minutesBetween($this->created_at, $this->first_response_at)) : '–';
     }
 
     /** Batas respons: waktu paling lambat laporan diambil/ditugaskan (dihitung dalam jam kerja). */

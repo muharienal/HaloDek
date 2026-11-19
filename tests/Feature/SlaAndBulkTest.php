@@ -3,8 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
-use App\Models\InventoryItem;
-use App\Models\Location;
 use App\Models\Report;
 use App\Models\Team;
 use App\Models\User;
@@ -206,7 +204,8 @@ class SlaAndBulkTest extends TestCase
     {
         $team = Team::where('slug', 'it')->first();
         $cat = Category::where('team_id', $team->id)->where('allow_custom', false)->first();
-        $loc = Location::create(['name' => 'Ruang Rapat A']);
+        $this->fakeInventaris();
+        $loc = (object) ['id' => 1];
         $other = $this->user();
 
         $this->actingAs($other)->post(route('employee.reports.store'), [

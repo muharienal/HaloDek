@@ -24,7 +24,6 @@
                     <div class="field"><span class="label">Regu yang Anda tangani</span>
                         <div class="flex gap-2 wrap">@if ($user->team)<x-team-chip :team="$user->team" />@else<span class="muted">–</span>@endif</div></div>
                 @endif
-                <x-input name="email" type="email" label="Email" :value="$user->email" />
                 <x-input name="phone" type="tel" inputmode="tel" label="No. WhatsApp" :value="$user->phone" placeholder="0812 3456 7890" maxlength="20" autocomplete="tel" data-phone hint="Otomatis berformat 62. Dipakai untuk kabar laporan lewat WhatsApp (diproses, selesai). Kosongkan jika tidak mau menerima." />
                 <div><button class="btn btn-primary"><x-icon name="save" :size="16" /> Simpan Profil</button></div>
             </form>
@@ -36,7 +35,7 @@
             <form method="POST" action="{{ route('profile.password') }}" class="card-body" style="display:grid;gap:16px">
                 @csrf @method('PUT')
                 <x-input name="current_password" type="password" label="Password saat ini" required autocomplete="current-password" />
-                <x-input name="password" type="password" label="Password baru" required autocomplete="new-password" hint="Minimal 10 karakter: huruf besar, huruf kecil, dan angka." />
+                <x-input name="password" type="password" label="Password baru" required autocomplete="new-password" hint="Minimal 6 karakter, bebas huruf, angka, atau simbol." />
                 <x-input name="password_confirmation" type="password" label="Ulangi password baru" required autocomplete="new-password" />
                 <div><button class="btn btn-primary"><x-icon name="lock" :size="16" /> Perbarui Password</button></div>
             </form>

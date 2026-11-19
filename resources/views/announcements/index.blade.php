@@ -5,7 +5,7 @@
 @section('content')
     @php $me = auth()->user(); @endphp
 
-    @if ($me->isAdmin())
+    @if ($me->canAct())
         <div class="flex justify-end mb-4">
             <button class="btn btn-primary" data-modal-open="announcement-modal"><x-icon name="plus" :size="16" /> Buat Pengumuman</button>
         </div>
@@ -24,7 +24,7 @@
                         <p class="pre-line mt-2">{{ $a->body }}</p>
                         <p class="text-xs faint mt-3">Oleh {{ $a->user->name ?? 'Admin' }} · {{ $a->created_at->translatedFormat('d M Y H:i') }}@if ($a->expires_at) · berlaku sampai {{ $a->expires_at->translatedFormat('d M Y') }}@endif</p>
                     </div>
-                    @if ($me->isSuperadmin() || ($me->isAdmin() && $a->user_id === $me->id))
+                    @if ($me->isSuperadmin() || ($me->canAct() && $a->user_id === $me->id))
                         <div class="flex gap-2 shrink-0">
                             <button class="btn btn-secondary btn-icon btn-sm" aria-label="Ubah" data-modal-open="announcement-modal" data-title="Ubah Pengumuman"
                                     data-action="{{ route('admin.announcements.update', $a) }}"
@@ -42,7 +42,7 @@
     <div class="card mt-4">{{ $announcements->links() }}</div>
 @endsection
 
-@if (auth()->user()->isAdmin())
+@if (auth()->user()->canAct())
     @push('modals')
         <x-form-modal id="announcement-modal" create-title="Buat Pengumuman" edit-title="Ubah Pengumuman" :action="route('admin.announcements.store')">
             <div style="display:grid;gap:16px">

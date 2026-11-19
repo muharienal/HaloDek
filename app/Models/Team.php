@@ -19,13 +19,30 @@ class Team extends Model
 
     protected $fillable = [
         'name', 'slug', 'code', 'description', 'icon', 'color',
-        'is_active', 'is_system', 'sort_order',
+        'is_active', 'is_system', 'sort_order', 'note_templates',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'is_system' => 'boolean',
+        'note_templates' => 'array',
     ];
+
+    /**
+     * Template catatan cepat regu ini; bila belum diatur, pakai bawaan dari config.
+     *
+     * @return array{selesai: array<int,string>, ditolak: array<int,string>}
+     */
+    public function noteTemplates(): array
+    {
+        $own = $this->note_templates ?? [];
+        $default = config('halodek.note_templates');
+
+        return [
+            'selesai' => array_key_exists('selesai', $own) ? array_values($own['selesai']) : $default['selesai'],
+            'ditolak' => array_key_exists('ditolak', $own) ? array_values($own['ditolak']) : $default['ditolak'],
+        ];
+    }
 
     /** Seluruh anggota regu (Kepala Regu + Staf). */
     public function users(): HasMany
@@ -51,16 +68,6 @@ class Team extends Model
     public function reports(): HasMany
     {
         return $this->hasMany(Report::class);
-    }
-
-    public function inventoryCategories(): HasMany
-    {
-        return $this->hasMany(InventoryCategory::class)->orderBy('sort_order')->orderBy('name');
-    }
-
-    public function inventoryItems(): HasMany
-    {
-        return $this->hasMany(InventoryItem::class);
     }
 
     public function scopeActive(Builder $query): Builder

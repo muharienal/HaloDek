@@ -36,7 +36,6 @@ class UserController extends Controller
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('name', 'like', "%{$search}%")
                 ->orWhere('nik', 'like', "%{$search}%")
-                ->orWhere('email', 'like', "%{$search}%")
                 ->orWhere('department', 'like', "%{$search}%")))
             ->when($role !== 'semua', fn ($q) => $q->where('role', $role))
             ->when($state === 'aktif', fn ($q) => $q->where('is_active', true))
@@ -78,7 +77,7 @@ class UserController extends Controller
         $data['is_active'] = $request->boolean('is_active');
 
         if ($user->id === $request->user()->id && ($data['role'] !== $user->role || ! $data['is_active'])) {
-            return back()->with('error', 'Anda tidak dapat mengubah role atau menonaktifkan akun Anda sendiri.');
+            return back()->with('error', 'Anda tidak dapat mengubah peran atau menonaktifkan akun Anda sendiri.');
         }
 
         if ($this->wouldRemoveLastSuperadmin($user, $data['role'], $data['is_active'])) {
@@ -162,10 +161,10 @@ class UserController extends Controller
 
     public function template(): StreamedResponse
     {
-        return Csv::download('template-import-pengguna.csv', ['nik', 'name', 'role', 'email', 'phone', 'department', 'position', 'regu'], [
-            ['00010', 'Andi Wijaya', 'karyawan', 'andi@contoh.co.id', '08123456789', 'Finance', 'Staf', ''],
-            ['00011', 'Rina Marlina', 'kepala_regu', '', '', 'Keamanan', 'Kepala Regu Keamanan', 'keamanan'],
-            ['00012', 'Joko Susilo', 'staf', '', '', 'Keamanan', 'Petugas Keamanan', 'keamanan'],
+        return Csv::download('template-import-pengguna.csv', ['nik', 'name', 'role', 'phone', 'department', 'position', 'regu'], [
+            ['00010', 'Andi Wijaya', 'karyawan', '08123456789', 'Finance', 'Staf', ''],
+            ['00011', 'Rina Marlina', 'kepala_regu', '', 'Keamanan', 'Kepala Regu Keamanan', 'keamanan'],
+            ['00012', 'Joko Susilo', 'staf', '', 'Keamanan', 'Petugas Keamanan', 'keamanan'],
         ]);
     }
 
@@ -173,11 +172,11 @@ class UserController extends Controller
     {
         $rows = (function () {
             foreach (User::with('team')->orderBy('name')->cursor() as $u) {
-                yield [$u->nik, $u->name, $u->role, $u->email, $u->phone, $u->department, $u->position, $u->team->slug ?? '', $u->is_active ? 'aktif' : 'nonaktif'];
+                yield [$u->nik, $u->name, $u->role, $u->phone, $u->department, $u->position, $u->team->slug ?? '', $u->is_active ? 'aktif' : 'nonaktif'];
             }
         })();
 
-        return Csv::download('pengguna-halodek-'.now()->format('Ymd').'.csv', ['nik', 'name', 'role', 'email', 'phone', 'department', 'position', 'regu', 'status'], $rows);
+        return Csv::download('pengguna-halodek-'.now()->format('Ymd').'.csv', ['nik', 'name', 'role', 'phone', 'department', 'position', 'regu', 'status'], $rows);
     }
 
     public function import(Request $request)
@@ -188,13 +187,11 @@ class UserController extends Controller
         $admins = 0;
         $result = $this->runImport($request, ['nik', 'name'], function (array $d) use ($teams, $roles, &$admins) {
             $d['role'] = ($d['role'] ?? '') ?: 'karyawan';
-            $d['email'] = ($d['email'] ?? '') ?: null;
 
             $v = Validator::make($d, [
                 'nik' => ['required', 'string', 'max:50', 'unique:users,nik'],
                 'name' => ['required', 'string', 'max:255'],
                 'role' => ['required', Rule::in($roles)],
-                'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
                 'phone' => ['nullable', 'string', 'max:30'],
                 'department' => ['nullable', 'string', 'max:100'],
                 'position' => ['nullable', 'string', 'max:100'],
@@ -246,7 +243,6 @@ class UserController extends Controller
         $data = $request->validate([
             'nik' => ['required', 'string', 'max:50', Rule::unique('users', 'nik')->ignore($user?->id)],
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user?->id)],
             'phone' => ['nullable', 'string', 'max:30'],
             'department' => ['nullable', 'string', 'max:100'],
             'position' => ['nullable', 'string', 'max:100'],
@@ -256,7 +252,7 @@ class UserController extends Controller
             'nik.required' => 'NIK wajib diisi.',
             'nik.unique' => 'NIK ini sudah terdaftar.',
             'name.required' => 'Nama wajib diisi.',
-            'role.required' => 'Role wajib dipilih.',
+            'role.required' => 'Peran wajib dipilih.',
         ]);
 
         // Kepala Regu & Staf wajib punya regu; Superadmin & Karyawan tidak terikat regu.

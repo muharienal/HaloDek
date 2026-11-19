@@ -23,7 +23,7 @@ class AnnouncementController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        abort_unless($request->user()->isAdmin(), 403);
+        abort_unless($request->user()->canAct(), 403);
 
         $announcement = Announcement::create($this->validated($request) + ['user_id' => $request->user()->id]);
 
@@ -71,6 +71,6 @@ class AnnouncementController extends Controller
     private function guardOwnership(Announcement $announcement): void
     {
         $user = auth()->user();
-        abort_unless($user->isSuperadmin() || ($user->isAdmin() && $announcement->user_id === $user->id), 403);
+        abort_unless($user->isSuperadmin() || ($user->canAct() && $announcement->user_id === $user->id), 403);
     }
 }

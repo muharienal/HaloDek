@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
-use App\Models\Location;
 use App\Models\Report;
 use App\Models\Team;
 use App\Models\User;
@@ -142,7 +141,8 @@ class SimplerFlowTest extends TestCase
 
     public function test_title_is_optional_and_generated(): void
     {
-        $loc = Location::create(['name' => 'Ruang Rapat A']);
+        $this->fakeInventaris();
+        $loc = (object) ['id' => 1];
         $cat = Category::where('team_id', Team::where('slug', 'it')->value('id'))->where('name', 'Internet & WiFi')->first();
         $r = $this->submit(['title' => '', 'category_id' => $cat->id, 'location_id' => $loc->id]);
         $this->assertSame('Internet & WiFi – Ruang Rapat A', $r->title);
@@ -196,8 +196,10 @@ class SimplerFlowTest extends TestCase
     {
         $this->actingAs($this->head)->get(route('dashboard'))
             ->assertSee('Perlu Ditangani')->assertSee('Menunggu Diambil')
-            ->assertDontSee('Antrean')->assertDontSee('tiket');
-        $this->actingAs($this->emp)->get(route('dashboard'))->assertDontSee('tiket')->assertDontSee('Antrean');
+            ->assertDontSee('Antrean');
+        $html = $this->actingAs($this->emp)->get(route('dashboard'))->assertDontSee('Antrean')->getContent();
+        // "tiket" hanya boleh muncul sebagai kata kunci kategori ("tiket pesawat"), bukan istilah UI.
+        $this->assertDoesNotMatchRegularExpression('/tiket(?! pesawat)/i', $html);
         $this->assertSame('Layanan Pelaporan Terpadu', config('halodek.tagline'));
     }
 

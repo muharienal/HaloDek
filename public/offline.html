@@ -13,7 +13,7 @@
   img{width:84px;height:84px;border-radius:22px;box-shadow:0 12px 30px -10px rgba(0,0,0,.5)}
   h1{font-size:24px;margin:20px 0 8px}
   p{margin:0 0 22px;line-height:1.55;opacity:.9}
-  button{font:inherit;font-weight:700;border:0;border-radius:14px;padding:12px 22px;color:#fff;cursor:pointer;background:linear-gradient(135deg,#FF9A3C,#FF6B3D)}
+  .retry{display:inline-block;font:inherit;font-weight:700;border:0;border-radius:14px;padding:12px 22px;color:#fff;text-decoration:none;cursor:pointer;background:linear-gradient(135deg,#FF9A3C,#FF6B3D)}
 </style>
 </head>
 <body>
@@ -21,7 +21,7 @@
   <img src="images/halodek-icon.svg" alt="HaloDek" width="84" height="84">
   <h1>Anda sedang offline</h1>
   <p>HaloDek membutuhkan koneksi ke jaringan kantor untuk menampilkan dan mengirim laporan. Periksa Wi-Fi atau data seluler Anda, lalu coba lagi.</p>
-  <button type="button" onclick="location.reload()">Coba lagi</button>
+  <a class="retry" href="/">Coba lagi</a>
 </div>
 </body>
 </html>

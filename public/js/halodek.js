@@ -495,6 +495,76 @@
         }, function () { HU.toast('Gagal menyalin teks. Salin secara manual.', 'error'); });
     });
 
+    /* ---------- "Apa masalahnya?": cari kategori lintas regu (komponen x-category-search) ---------- */
+    (function () {
+        function norm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+        function esc(t) { var d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML.replace(/"/g, '&quot;'); }
+
+        function setup(box) {
+            var index = [];
+            try { index = JSON.parse(box.querySelector('[data-cat-index]').textContent || '[]'); } catch (e) { index = []; }
+            index.forEach(function (it) { it.hay = norm(it.n + ' ' + it.k + ' ' + it.tn); it.nn = norm(it.n); });
+            var q = box.querySelector('[data-cat-q]');
+            var out = box.querySelector('[data-cat-results]');
+            var link = box.dataset.mode === 'link';
+
+            function search() {
+                var words = norm(q.value).split(' ').filter(Boolean);
+                if (!words.length) { out.hidden = true; out.innerHTML = ''; return; }
+                var hits = index.map(function (it) {
+                    var score = 0;
+                    for (var i = 0; i < words.length; i++) {
+                        var w = words[i];
+                        if ((' ' + it.hay + ' ').indexOf(' ' + w) === -1) { return null; }
+                        score += it.nn.indexOf(w) === 0 ? 3 : (it.nn.indexOf(w) > -1 ? 2 : 1);
+                    }
+                    return { it: it, score: score };
+                }).filter(Boolean).sort(function (a, b) { return b.score - a.score; }).slice(0, 6);
+
+                out.innerHTML = !hits.length ? '<p class="cat-empty">' + esc(box.dataset.empty) + '</p>' : hits.map(function (h) {
+                    var inner = '<span class="ico" style="background:' + esc(h.it.tc) + '">' + esc(h.it.n.charAt(0) || '?') + '</span>'
+                        + '<span><span class="strong">' + esc(h.it.n) + '</span><span class="meta">Regu ' + esc(h.it.tn) + '</span></span>';
+                    if (link) {
+                        var url = box.dataset.createUrl + '?regu=' + encodeURIComponent(h.it.s) + '&kategori=' + encodeURIComponent(h.it.id);
+                        return '<a class="cat-hit" href="' + esc(url) + '">' + inner + '</a>';
+                    }
+                    return '<button type="button" class="cat-hit" data-team="' + esc(h.it.t) + '" data-cat="' + esc(h.it.id) + '">' + inner + '</button>';
+                }).join('');
+                out.hidden = false;
+            }
+
+            q.addEventListener('input', search);
+            q.addEventListener('keydown', function (e) {
+                if (e.key !== 'Enter') { return; }
+                e.preventDefault();
+                var first = out.querySelector('.cat-hit');
+                if (first) { first.click(); }
+            });
+            out.addEventListener('click', function (e) {
+                var b = e.target.closest('button.cat-hit');
+                if (!b) { return; }
+                box.dispatchEvent(new CustomEvent('hd:category-pick', { bubbles: true, detail: { team: b.dataset.team, cat: b.dataset.cat } }));
+                q.value = ''; out.hidden = true; out.innerHTML = '';
+            });
+        }
+        document.addEventListener('DOMContentLoaded', function () { $$('[data-cat-search]').forEach(setup); });
+    })();
+
+    /* ---------- template catatan cepat: klik untuk mengisi kolom catatan ---------- */
+    document.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-quick-note]');
+        if (!b) { return; }
+        var wrap = b.closest('[data-quick-target]');
+        var ta = wrap && document.getElementById(wrap.dataset.quickTarget);
+        if (!ta) { return; }
+        var text = b.dataset.quickNote;
+        var cur = ta.value.trim();
+        ta.value = cur && cur.indexOf(text) === -1 ? cur + ' ' + text : (cur || text);
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+    });
+
     /* ---------- filter dilipat di HP (tombol "Filter"); status buka diingat per sesi ---------- */
     (function () {
         var KEY = 'hd-filters-open';

@@ -63,7 +63,7 @@
                 <button type="submit" class="btn btn-cta btn-block btn-lg">Masuk <x-icon name="arrow-right" :size="18" /></button>
             </form>
         </section>
-        <p class="auth-copy">© {{ date('Y') }} IT {{ config('halodek.company') }}</p>
+        <p class="auth-copy">IT {{ config('halodek.company') }} © {{ date('Y') }}</p>
     </main>
 </div>
 

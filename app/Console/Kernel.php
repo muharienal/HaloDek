@@ -12,7 +12,7 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Pengingat lewat batas TIDAK perlu dijadwalkan: aplikasi menjalankannya sendiri (lihat RunOverdueReminders).
+        // Pengingat lewat batas TIDAK perlu dijadwalkan: aplikasi menjalankannya sendiri (lihat RunBackgroundTasks), begitu juga pembersihan data harian..
     }
 
     /**

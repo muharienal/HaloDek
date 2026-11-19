@@ -31,7 +31,7 @@
                 <div><div class="bold text-lg">{{ $team->users_count }}</div><div class="text-xs muted">Anggota</div></div>
                 <div><div class="bold text-lg">{{ $team->categories_count }}</div><div class="text-xs muted">Kategori</div></div>
             </div>
-            <div class="text-xs muted mt-3">Kepala: {{ $team->head?->name ?? 'belum ditetapkan' }} · {{ $team->inventory_items_count }} item inventaris</div>
+            <div class="text-xs muted mt-3">Kepala: {{ $team->head?->name ?? 'belum ditetapkan' }}</div>
         </a>
     @empty
         <div class="card col-span-2" style="grid-column:1/-1"><x-empty icon="users" title="Belum ada regu">Anda belum tergabung di regu mana pun.</x-empty></div>

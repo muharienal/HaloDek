@@ -49,6 +49,9 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
 
     // Pengumuman
     Route::get('/pengumuman', [AnnouncementController::class, 'index'])->name('announcements.index');
+    // QR di barang inventaris -> form lapor terisi otomatis.
+    Route::get('/q/{item}', \App\Http\Controllers\ScanController::class)->whereNumber('item')->name('scan');
+
     Route::get('/cari', [\App\Http\Controllers\SearchController::class, 'index'])->middleware('throttle:60,1')->name('search');
 
     // ----- Laporan saya (pelapor) -----
@@ -65,13 +68,12 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
         Route::patch('/{report}/buka-lagi', [Employee\ReportController::class, 'reopen'])->middleware('throttle:submit')->name('reopen');
     });
 
-    // ===== AREA PENGELOLA (Superadmin, Kepala Regu, Staf Regu) =====
+    // ===== AREA PENGELOLA (Superadmin, Manajer, Kepala Regu, Staf Regu) =====
     Route::prefix('admin')->name('admin.')->middleware('role:admin')->group(function () {
 
         // Laporan & tindak lanjut
         Route::get('/laporan', [Admin\ReportController::class, 'index'])->name('reports.index');
         Route::get('/laporan/ekspor', [Admin\ReportController::class, 'export'])->middleware('throttle:bulk')->name('reports.export');
-        Route::post('/laporan/massal', [Admin\ReportController::class, 'bulk'])->middleware('throttle:bulk')->name('reports.bulk');
         Route::get('/laporan/{report}', [Admin\ReportController::class, 'show'])->name('reports.show');
 
         // Laporan bulanan (ringkasan per regu; Excel dan cetak PDF)
@@ -79,20 +81,11 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
         Route::get('/laporan-bulanan/cetak', [Admin\MonthlyReportController::class, 'print'])->name('monthly.print');
         Route::get('/laporan-bulanan/unduh', [Admin\MonthlyReportController::class, 'download'])->middleware('throttle:bulk')->name('monthly.download');
         Route::get('/laporan/{report}/cetak', [Admin\ReportController::class, 'print'])->name('reports.print');
-        Route::patch('/laporan/{report}', [Admin\ReportController::class, 'update'])->name('reports.update');
-        Route::post('/laporan/{report}/tutup', [Admin\ReportController::class, 'close'])->name('reports.close');
-        Route::post('/laporan/{report}/ambil', [Admin\ReportController::class, 'take'])->name('reports.take');
-        Route::post('/laporan/{report}/lepas', [Admin\ReportController::class, 'release'])->name('reports.release');
-        Route::post('/laporan/{report}/pindah', [Admin\ReportController::class, 'transfer'])->name('reports.transfer');
-        Route::post('/laporan/{report}/balas', [Admin\ReportController::class, 'comment'])->middleware('throttle:submit')->name('reports.comment');
         Route::delete('/laporan/{report}', [Admin\ReportController::class, 'destroy'])->name('reports.destroy')->middleware('role:superadmin');
 
         // Regu & kategori laporan (semua pengelola melihat regunya; kategori dikelola Kepala Regu; Superadmin: kelola penuh)
         Route::get('/regu', [Admin\TeamController::class, 'index'])->name('teams.index');
         Route::get('/regu/{team}', [Admin\TeamController::class, 'show'])->name('teams.show');
-        Route::post('/regu/{team}/kategori', [Admin\CategoryController::class, 'store'])->name('categories.store');
-        Route::patch('/kategori/{category}', [Admin\CategoryController::class, 'update'])->name('categories.update');
-        Route::delete('/kategori/{category}', [Admin\CategoryController::class, 'destroy'])->name('categories.destroy');
 
         Route::middleware('role:superadmin')->group(function () {
             Route::post('/regu', [Admin\TeamController::class, 'store'])->name('teams.store');
@@ -103,37 +96,24 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
             Route::delete('/regu/{team}/anggota/{user}', [Admin\TeamController::class, 'removeMember'])->name('teams.members.remove');
         });
 
-        // Inventaris per regu: kategori + item (hak akses dijaga di controller)
-        Route::prefix('inventaris')->name('inventory.')->group(function () {
-            Route::get('/', [Admin\InventoryController::class, 'index'])->name('index');
-            Route::get('/template', [Admin\InventoryController::class, 'template'])->name('template');
-            Route::get('/ekspor', [Admin\InventoryController::class, 'export'])->middleware('throttle:bulk')->name('export');
-            Route::post('/impor', [Admin\InventoryController::class, 'import'])->middleware('throttle:bulk')->name('import');
+        // ===== Aksi (semua pengelola kecuali Manajer, yang hanya memantau) =====
+        Route::middleware('role:superadmin,kepala_regu,staf')->group(function () {
+            Route::post('/laporan/massal', [Admin\ReportController::class, 'bulk'])->middleware('throttle:bulk')->name('reports.bulk');
+            Route::patch('/laporan/{report}', [Admin\ReportController::class, 'update'])->name('reports.update');
+            Route::post('/laporan/{report}/tutup', [Admin\ReportController::class, 'close'])->name('reports.close');
+            Route::post('/laporan/{report}/ambil', [Admin\ReportController::class, 'take'])->name('reports.take');
+            Route::post('/laporan/{report}/lepas', [Admin\ReportController::class, 'release'])->name('reports.release');
+            Route::post('/laporan/{report}/pindah', [Admin\ReportController::class, 'transfer'])->name('reports.transfer');
+            Route::post('/laporan/{report}/balas', [Admin\ReportController::class, 'comment'])->middleware('throttle:submit')->name('reports.comment');
+            Route::post('/regu/{team}/kategori', [Admin\CategoryController::class, 'store'])->name('categories.store');
+            Route::patch('/kategori/{category}', [Admin\CategoryController::class, 'update'])->name('categories.update');
+            Route::delete('/kategori/{category}', [Admin\CategoryController::class, 'destroy'])->name('categories.destroy');
+            Route::patch('/regu/{team}/template', [Admin\CategoryController::class, 'templates'])->name('teams.templates');
 
-            Route::post('/kategori', [Admin\InventoryController::class, 'storeCategory'])->name('categories.store');
-            Route::patch('/kategori/{inventoryCategory}', [Admin\InventoryController::class, 'updateCategory'])->name('categories.update');
-            Route::delete('/kategori/{inventoryCategory}', [Admin\InventoryController::class, 'destroyCategory'])->name('categories.destroy');
-
-            Route::post('/item', [Admin\InventoryController::class, 'store'])->name('items.store');
-            Route::get('/item/{item}', [Admin\InventoryController::class, 'show'])->name('items.show');
-            Route::patch('/item/{item}', [Admin\InventoryController::class, 'update'])->name('items.update');
-            Route::delete('/item/{item}', [Admin\InventoryController::class, 'destroy'])->name('items.destroy');
+            Route::post('/pengumuman', [AnnouncementController::class, 'store'])->name('announcements.store');
+            Route::patch('/pengumuman/{announcement}', [AnnouncementController::class, 'update'])->name('announcements.update');
+            Route::delete('/pengumuman/{announcement}', [AnnouncementController::class, 'destroy'])->name('announcements.destroy');
         });
-
-        // Lokasi/ruangan umum untuk form pelaporan: Superadmin & Kepala Regu
-        Route::middleware('role:superadmin,kepala_regu')->group(function () {
-            Route::get('/lokasi', [Admin\LocationController::class, 'index'])->name('locations.index');
-            Route::get('/lokasi/template', [Admin\LocationController::class, 'template'])->name('locations.template');
-            Route::post('/lokasi/impor', [Admin\LocationController::class, 'import'])->middleware('throttle:bulk')->name('locations.import');
-            Route::post('/lokasi', [Admin\LocationController::class, 'store'])->name('locations.store');
-            Route::patch('/lokasi/{location}', [Admin\LocationController::class, 'update'])->name('locations.update');
-            Route::delete('/lokasi/{location}', [Admin\LocationController::class, 'destroy'])->name('locations.destroy');
-        });
-
-        // Pengumuman (admin dapat membuat; ruang lingkup dijaga di controller)
-        Route::post('/pengumuman', [AnnouncementController::class, 'store'])->name('announcements.store');
-        Route::patch('/pengumuman/{announcement}', [AnnouncementController::class, 'update'])->name('announcements.update');
-        Route::delete('/pengumuman/{announcement}', [AnnouncementController::class, 'destroy'])->name('announcements.destroy');
 
         // Superadmin: pengguna & audit
         Route::middleware('role:superadmin')->group(function () {

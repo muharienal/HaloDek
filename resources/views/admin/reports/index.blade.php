@@ -71,11 +71,11 @@
     @else
         <div class="table-wrap mt-4">
             <table class="table report-table">
-                <thead><tr><th class="bulk-col"><input type="checkbox" class="bulk-check" data-bulk-all aria-label="Pilih semua laporan aktif di halaman ini"></th><th>Laporan</th><th>Pelapor</th><th>Regu / Kategori</th><th>Prioritas</th><th>Status</th><th>Penanggung Jawab</th><th></th></tr></thead>
+                <thead><tr><th class="bulk-col">@if (auth()->user()->canAct())<input type="checkbox" class="bulk-check" data-bulk-all aria-label="Pilih semua laporan aktif di halaman ini">@endif</th><th>Laporan</th><th>Pelapor</th><th>Regu / Kategori</th><th>Prioritas</th><th>Status</th><th>Penanggung Jawab</th><th></th></tr></thead>
                 <tbody>
                 @foreach ($reports as $r)
                     <tr>
-                        <td class="bulk-col">@if ($r->isOpen())<input type="checkbox" class="bulk-check" name="ids[]" value="{{ $r->id }}" form="bulk-form" data-bulk-item aria-label="Pilih {{ $r->report_number }}">@endif</td>
+                        <td class="bulk-col">@if ($r->isOpen() && auth()->user()->canAct())<input type="checkbox" class="bulk-check" name="ids[]" value="{{ $r->id }}" form="bulk-form" data-bulk-item aria-label="Pilih {{ $r->report_number }}">@endif</td>
                         <td style="max-width:280px"><a class="mono strong" href="{{ route('admin.reports.show', $r) }}">{{ $r->report_number }}</a>
                             <div class="truncate">{{ $r->title }}</div><div class="text-xs muted">{{ $r->created_at->translatedFormat('d M Y H:i') }}</div></td>
                         <td>{{ $r->reporter_name }}</td>
@@ -113,6 +113,7 @@
 </div>
 
 {{-- ===== Bilah aksi massal (muncul saat ada laporan dipilih) ===== --}}
+@if (auth()->user()->canAct())
 @php $canAssignAny = ! auth()->user()->isStaf(); @endphp
 <form method="POST" action="{{ route('admin.reports.bulk') }}" id="bulk-form" class="bulk-bar" hidden
       data-confirm="Terapkan aksi ini ke semua laporan yang dipilih?" data-confirm-title="Aksi massal" data-confirm-ok="Terapkan" data-confirm-tone="primary">
@@ -135,8 +136,10 @@
     <button class="btn btn-primary">Terapkan</button>
     <button type="button" class="btn btn-ghost" data-bulk-clear>Batal</button>
 </form>
+@endif
 @endsection
 
+@if (auth()->user()->canAct())
 @push('scripts')
 <script nonce="{{ $cspNonce ?? '' }}">
 (function () {
@@ -172,3 +175,4 @@
 })();
 </script>
 @endpush
+@endif

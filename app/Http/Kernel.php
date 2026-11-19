@@ -27,7 +27,14 @@ class Kernel extends HttpKernel
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             \App\Http\Middleware\NoStore::class,
-            \App\Http\Middleware\RunOverdueReminders::class,
+            \App\Http\Middleware\RunBackgroundTasks::class,
+        ],
+
+        // API untuk aplikasi Inventaris (data karyawan). Token = INVENTARIS_API_TOKEN, sama di kedua aplikasi.
+        'api' => [
+            \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\ApiToken::class,
         ],
 
     ];

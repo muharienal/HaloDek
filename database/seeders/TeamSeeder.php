@@ -22,7 +22,6 @@ class TeamSeeder extends Seeder
                     'Komputer & Laptop', 'Printer & Scanner', 'Internet & WiFi', 'Aplikasi / Sistem Informasi',
                     'Email Korporat', 'Akses & Akun', 'Permintaan Perangkat / Software',
                 ],
-                'inventory' => ['Laptop & PC', 'Printer & Scanner', 'Jaringan', 'Software', 'Akses & Lisensi'],
             ],
             [
                 'slug' => Team::SLUG_SARPRAS, 'name' => 'Sarana dan Prasarana', 'code' => 'SP', 'icon' => 'building', 'color' => 'amber',
@@ -31,7 +30,6 @@ class TeamSeeder extends Seeder
                     'Gedung & Bangunan', 'Kendaraan Operasional', 'Kelistrikan', 'Meja Kursi & Furniture',
                     'Toilet & Sanitasi', 'Air & Plumbing', 'Kebersihan', 'AC',
                 ],
-                'inventory' => ['AC', 'Kendaraan', 'Ruangan', 'Furniture', 'Kelistrikan'],
             ],
             [
                 'slug' => Team::SLUG_KESEKRETARIATAN, 'name' => 'Kesekretariatan', 'code' => 'KS', 'icon' => 'document', 'color' => 'violet',
@@ -40,7 +38,6 @@ class TeamSeeder extends Seeder
                     'Surat Menyurat', 'Arsip & Dokumen', 'Perlengkapan Kantor (ATK)', 'Ruang Rapat & Acara',
                     'Perjalanan Dinas', 'Ekspedisi & Kurir',
                 ],
-                'inventory' => ['Perlengkapan Kantor', 'Arsip', 'Ruang Rapat'],
             ],
             [
                 'slug' => Team::SLUG_KEAMANAN, 'name' => 'Keamanan', 'code' => 'KM', 'icon' => 'shield', 'color' => 'rose',
@@ -49,14 +46,12 @@ class TeamSeeder extends Seeder
                     'Keamanan Area', 'Kehilangan Barang', 'Akses Gedung & Parkir', 'CCTV',
                     'Kecelakaan / Near Miss', 'APAR & Evakuasi',
                 ],
-                'inventory' => ['APAR & Pemadam', 'CCTV', 'Perlengkapan Jaga', 'Akses & Gerbang'],
             ],
         ];
 
         foreach ($teams as $data) {
             $categories = $data['categories'];
-            $inventory = $data['inventory'];
-            unset($data['categories'], $data['inventory']);
+            unset($data['categories']);
 
             $team = Team::updateOrCreate(['slug' => $data['slug']], $data + ['is_system' => true, 'is_active' => true]);
 
@@ -65,10 +60,6 @@ class TeamSeeder extends Seeder
             }
             // Setiap regu punya kategori "Lainnya" dengan isian bebas.
             $team->categories()->firstOrCreate(['name' => 'Lainnya'], ['allow_custom' => true, 'sort_order' => 999]);
-
-            foreach ($inventory as $i => $name) {
-                $team->inventoryCategories()->firstOrCreate(['name' => $name], ['sort_order' => $i + 1]);
-            }
         }
     }
 }

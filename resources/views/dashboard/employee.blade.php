@@ -11,22 +11,16 @@
     ]])
 
     <div class="card mt-5">
-        <div class="card-head"><h2>Ajukan Laporan ke…</h2></div>
+        <div class="card-head"><h2>Ajukan Laporan</h2></div>
         <div class="card-body">
             @if ($teams->isEmpty())
                 <x-empty icon="inbox" title="Belum ada regu aktif">Hubungi Superadmin untuk mengaktifkan regu penerima laporan.</x-empty>
             @else
-                <div class="choice-grid">
+                <x-category-search :teams="$teams" mode="link" id="dash-cat-q" empty-text="Tidak ditemukan. Pilih regu di bawah, lalu kategori “Lainnya”." />
+                <div class="team-pills">
+                    <span class="text-sm muted">atau pilih regu:</span>
                     @foreach ($teams as $team)
-                        <a class="choice" href="{{ route('employee.reports.create', ['regu' => $team->slug]) }}" style="text-decoration:none">
-                            <div class="choice-box">
-                                <span class="ico" style="background: {{ $team->hex() }}"><x-icon :name="$team->icon" :size="22" /></span>
-                                <span>
-                                    <span class="strong" style="display:block">{{ $team->name }}</span>
-                                    <span class="text-sm muted">{{ $team->description ?: $team->categories_count.' kategori layanan' }}</span>
-                                </span>
-                            </div>
-                        </a>
+                        <a class="team-pill" href="{{ route('employee.reports.create', ['regu' => $team->slug]) }}"><span class="dot" style="background: {{ $team->hex() }}"></span>{{ $team->name }}</a>
                     @endforeach
                 </div>
             @endif
@@ -39,21 +33,17 @@
             @if ($recent->isEmpty())
                 <x-empty icon="document" title="Belum ada laporan">Laporan yang Anda ajukan akan muncul di sini.</x-empty>
             @else
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead><tr><th>No. Laporan</th><th>Judul</th><th>Regu</th><th>Status</th></tr></thead>
-                        <tbody>
-                        @foreach ($recent as $r)
-                            <tr>
-                                <td><a class="mono strong" href="{{ route('employee.reports.show', $r) }}">{{ $r->report_number }}</a><div class="text-xs muted">{{ $r->created_at->diffForHumans() }}</div></td>
-                                <td style="max-width:260px"><div class="truncate">{{ $r->title }}</div><div class="text-xs muted">{{ $r->categoryDisplayName() }}</div></td>
-                                <td><x-team-chip :team="$r->team" /></td>
-                                <td><x-badge :tone="$r->statusTone()">{{ $r->statusLabel() }}</x-badge></td>
-                            </tr>
-                        @endforeach
-                        </tbody>
-                    </table>
-                </div>
+                <ul class="report-mini">
+                    @foreach ($recent as $r)
+                        <li>
+                            <a href="{{ route('employee.reports.show', $r) }}">
+                                <span class="rm-top"><span class="mono strong">{{ $r->report_number }}</span><x-badge :tone="$r->statusTone()">{{ $r->statusLabel() }}</x-badge></span>
+                                <span class="rm-title truncate">{{ $r->title }}</span>
+                                <span class="rm-meta">{{ $r->team->name ?? '' }} · {{ $r->created_at->diffForHumans() }}</span>
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
             @endif
         </div>
 
