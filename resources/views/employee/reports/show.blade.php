@@ -4,12 +4,11 @@
 
 @section('content')
 @php $me = auth()->user(); @endphp
-<div class="flex items-center justify-between wrap gap-3 mb-4">
-    <a href="{{ route('employee.reports.index') }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Kembali</a>
-    <div class="flex gap-2 wrap">
-        <x-badge :tone="$report->statusTone()">{{ $report->statusLabel() }}</x-badge>
-        <x-badge :tone="$report->priorityTone()" plain>Prioritas {{ $report->priorityLabel() }}</x-badge>
+<div class="detail-head mb-4">
+    <div class="detail-nav">
+        <a href="{{ route('employee.reports.index') }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Kembali</a>
     </div>
+    <div class="detail-panel"><x-report-meta :report="$report" /></div>
 </div>
 
 <div class="grid cols-main-r" style="align-items:start">

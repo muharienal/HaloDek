@@ -4,32 +4,37 @@
 
 @section('content')
 @php $me = auth()->user(); @endphp
-<div class="detail-bar mb-4">
-    <div class="detail-top">
+<div class="detail-head mb-4">
+    <div class="detail-nav">
         <a href="{{ route('admin.reports.index') }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Semua laporan</a>
-        <a class="btn btn-secondary btn-sm detail-print" href="{{ route('admin.reports.print', $report) }}" target="_blank" title="Cetak"><x-icon name="print" :size="16" /> <span>Cetak</span></a>
+        <a class="btn btn-ghost btn-sm" href="{{ route('admin.reports.print', $report) }}" target="_blank" title="Cetak laporan"><x-icon name="print" :size="16" /> Cetak</a>
     </div>
-    <div class="detail-badges">
-        <x-badge :tone="$report->statusTone()">{{ $report->statusLabel() }}</x-badge>
-        <x-badge :tone="$report->priorityTone()" plain>Prioritas {{ $report->priorityLabel() }}</x-badge>
-        @if ($report->reopened_count)<x-badge tone="orange" plain>Dibuka ulang {{ $report->reopened_count }}×</x-badge>@endif
-        @if ($report->appealed_at)<x-badge tone="orange" plain>Banding</x-badge>@endif
+    @php
+        $canClose = $report->isOpen() && $me->can('manage', $report);
+        $canClaim = $me->can('claim', $report);
+        // Satu tombol utama saja: "Ambil" bila belum ada penanggung jawab, selain itu "Selesaikan".
+        $claimIsMain = $canClaim && ! $report->assigned_to_id;
+    @endphp
+    <div class="detail-panel">
+        <x-report-meta :report="$report" />
+        @if ($canClaim || $canClose || $me->can('release', $report))
+            <div class="detail-actions" role="group" aria-label="Tindakan">
+                @can('release', $report)
+                    <form method="POST" action="{{ route('admin.reports.release', $report) }}" data-confirm="Lepas laporan ini? Laporan kembali menunggu diambil anggota regu." data-confirm-title="Lepas laporan" data-confirm-ok="Lepas">@csrf<button class="btn btn-secondary btn-sm"><x-icon name="logout" :size="16" /> Lepas</button></form>
+                @endcan
+                @if ($canClaim && ! $claimIsMain)
+                    <form method="POST" action="{{ route('admin.reports.take', $report) }}">@csrf<button class="btn btn-secondary btn-sm"><x-icon name="user" :size="16" /> Ambil Alih</button></form>
+                @endif
+                @if ($canClose)
+                    <button type="button" class="btn btn-soft-danger btn-sm" data-modal-open="close-ditolak"><x-icon name="x-circle" :size="16" /> Tolak</button>
+                    <button type="button" class="btn {{ $claimIsMain ? 'btn-secondary' : 'btn-success' }} btn-sm" data-modal-open="close-selesai"><x-icon name="check-circle" :size="16" /> Selesaikan</button>
+                @endif
+                @if ($claimIsMain)
+                    <form method="POST" action="{{ route('admin.reports.take', $report) }}">@csrf<button class="btn btn-primary btn-sm"><x-icon name="user" :size="16" /> Ambil Laporan</button></form>
+                @endif
+            </div>
+        @endif
     </div>
-    @php $canClose = $report->isOpen() && $me->can('manage', $report); @endphp
-    @if ($me->can('claim', $report) || $canClose || $me->can('release', $report))
-        <div class="detail-actions">
-            @can('claim', $report)
-                <form method="POST" action="{{ route('admin.reports.take', $report) }}">@csrf<button class="btn btn-primary btn-sm"><x-icon name="user" :size="16" /> {{ $report->assigned_to_id ? 'Ambil Alih' : 'Ambil Laporan' }}</button></form>
-            @endcan
-            @if ($canClose)
-                <button type="button" class="btn btn-success btn-sm" data-modal-open="close-selesai"><x-icon name="check-circle" :size="16" /> Selesaikan</button>
-                <button type="button" class="btn btn-soft-danger btn-sm" data-modal-open="close-ditolak"><x-icon name="x-circle" :size="16" /> Tolak</button>
-            @endif
-            @can('release', $report)
-                <form method="POST" action="{{ route('admin.reports.release', $report) }}" data-confirm="Lepas laporan ini? Laporan kembali menunggu diambil anggota regu." data-confirm-title="Lepas laporan" data-confirm-ok="Lepas">@csrf<button class="btn btn-secondary btn-sm">Lepas</button></form>
-            @endcan
-        </div>
-    @endif
 </div>
 
 <div class="grid cols-main-r" style="align-items:start">
@@ -143,7 +148,7 @@
                 @if ($report->isOpen() && ! $report->assigned_to_id)
                     @php $deadline = $report->responseDeadline(); @endphp
                     <div><div class="text-xs muted">Batas respons</div><div>{{ $deadline->translatedFormat('d M Y, H:i') }}
-                        @if ($report->isOverdue())<span class="badge tone-red plain overdue-badge">Lewat batas</span>@endif</div>
+                        @if ($report->isOverdue())<span class="note-flag is-red"><x-icon name="clock" :size="13" /> Lewat batas</span>@endif</div>
                         <div class="text-xs faint">{{ config('halodek.response_sla.'.$report->priority) }} jam kerja untuk prioritas {{ $report->priorityLabel() }}</div></div>
                 @endif
                 <div><div class="text-xs muted">Respons pertama</div><div>@if ($report->first_response_at){{ $report->first_response_at->translatedFormat('d M Y, H:i') }} <span class="muted">({{ $report->responseText() }})</span>@else Belum ada respons @endif</div></div>
@@ -166,9 +171,12 @@
             </div>
         @endif
 
+        @php $canTransfer = $otherTeams->isNotEmpty() && $me->can('assign', $report); @endphp
+        @if ($canTransfer || $me->can('delete', $report))
         <div class="card">
+            <div class="card-head"><h2>Tindakan lain</h2></div>
             <div class="card-body" style="display:grid;gap:10px">
-                @if ($otherTeams->isNotEmpty() && $me->can('assign', $report))
+                @if ($canTransfer)
                     <button class="btn btn-secondary" data-modal-open="transfer-modal"><x-icon name="swap" :size="16" /> Alihkan ke Regu Lain</button>
                 @endif
                 @can('delete', $report)
@@ -177,6 +185,7 @@
                 @endcan
             </div>
         </div>
+        @endif
     </div>
 </div>
 @endsection

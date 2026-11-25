@@ -20,7 +20,7 @@
                 <div class="team-pills">
                     <span class="text-sm muted">atau pilih regu:</span>
                     @foreach ($teams as $team)
-                        <a class="team-pill" href="{{ route('employee.reports.create', ['regu' => $team->slug]) }}"><span class="dot" style="background: {{ $team->hex() }}"></span>{{ $team->name }}</a>
+                        <a class="team-pill" href="{{ route('employee.reports.create', ['regu' => $team->slug]) }}"><span class="chip-ico" style="background: {{ $team->hex() }}1F; color: {{ $team->hex() }}"><x-icon :name="$team->icon" :size="13" /></span>{{ $team->name }}<x-icon name="chevron-right" :size="14" /></a>
                     @endforeach
                 </div>
             @endif

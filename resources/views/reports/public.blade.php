@@ -23,10 +23,7 @@
 <main class="shell">
     <div class="page-head"><h1>{{ $report->report_number }}</h1></div>
 
-    <div class="flex gap-2 wrap items-center mb-4">
-        <x-badge :tone="$report->statusTone()">{{ $report->statusLabel() }}</x-badge>
-        <x-badge :tone="$report->priorityTone()" plain>Prioritas {{ $report->priorityLabel() }}</x-badge>
-    </div>
+    <div class="detail-panel mb-4"><x-report-meta :report="$report" :flags="false" /></div>
 
     <div class="grid cols-main-r" style="align-items:start">
         <div style="display:grid;gap:20px;min-width:0">

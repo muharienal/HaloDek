@@ -39,14 +39,14 @@
                             <td><a class="mono strong" href="{{ route('admin.reports.show', $r) }}">{{ $r->report_number }}</a> <span class="text-xs muted">· {{ $r->created_at->diffForHumans() }}</span>
                                 <div class="truncate text-sm" style="max-width:360px">{{ $r->title }}</div></td>
                             <td><x-team-chip :team="$r->team" /></td>
-                            <td><x-badge :tone="$r->priorityTone()" plain>{{ $r->priorityLabel() }}</x-badge></td>
+                            <td><x-priority :report="$r" /></td>
                             <td>
                                 @if ($r->assigned_to_id === auth()->id())
-                                    <span class="badge tone-blue plain">Tugas saya</span>
+                                    <x-badge tone="blue">Tugas saya</x-badge>
                                 @else
-                                    <span class="badge tone-amber plain">Menunggu diambil</span>
+                                    <x-badge tone="amber">Menunggu diambil</x-badge>
                                 @endif
-                                @if ($overdue->contains('id', $r->id))<span class="badge tone-red plain overdue-badge">Lewat batas</span>@endif
+                                @if ($overdue->contains('id', $r->id))<span class="note-flag is-red"><x-icon name="clock" :size="13" /> Lewat batas</span>@endif
                             </td>
                             <td class="text-right nowrap">
                                 @if (! $r->assigned_to_id)
@@ -54,7 +54,7 @@
                                         <form method="POST" action="{{ route('admin.reports.take', $r) }}" style="display:inline">@csrf<button class="btn btn-primary btn-sm">Ambil</button></form>
                                     @endcan
                                 @else
-                                    <a class="btn btn-secondary btn-sm" href="{{ route('admin.reports.show', $r) }}">Buka</a>
+                                    <a class="btn btn-ghost btn-sm" href="{{ route('admin.reports.show', $r) }}">Buka <x-icon name="chevron-right" :size="14" /></a>
                                 @endif
                             </td>
                         </tr>

@@ -8,7 +8,7 @@
 @if ($isSuper)
     <div class="alert alert-info">
         <x-icon name="question" :size="18" />
-        <div><strong>Butuh bidang lain?</strong> Tambahkan regu baru. Regu langsung muncul sebagai tujuan laporan bagi karyawan, dengan Kepala Regu, staf, kategori layanan, dan inventarisnya sendiri.</div>
+        <div><strong>Butuh bidang lain?</strong> Tambahkan regu baru. Regu langsung muncul sebagai tujuan laporan bagi karyawan, dengan Kepala Regu, staf, dan kategori layanannya sendiri.</div>
     </div>
     <div class="flex justify-end mb-4"><button class="btn btn-primary" data-modal-open="team-modal"><x-icon name="plus" :size="16" /> Tambah Regu</button></div>
 @endif

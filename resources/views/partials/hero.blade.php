@@ -13,7 +13,7 @@
     </div>
     <div class="hero-metrics">
         @foreach ($metrics as $m)
-            <a href="{{ $m['href'] ?? '#' }}" class="hm {{ ! empty($m['warn']) ? 'warn' : '' }}"><span class="hm-n">{{ $m['value'] }}</span><span class="hm-l">{{ $m['label'] }}</span></a>
+            <a href="{{ $m['href'] ?? '#' }}" class="hm {{ ! empty($m['warn']) ? 'warn' : '' }}" title="Lihat {{ \Illuminate\Support\Str::lower($m['label']) }}"><span class="hm-n">{{ $m['value'] }}</span><span class="hm-l">{{ $m['label'] }}</span><x-icon name="arrow-right" :size="16" class="hm-go" /></a>
         @endforeach
     </div>
 </section>

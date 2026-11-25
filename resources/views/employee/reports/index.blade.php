@@ -14,12 +14,13 @@
 
         <form method="GET" class="card-body filters" style="padding-bottom:0" data-autosubmit>
             <input type="hidden" name="status" value="{{ $status }}">
-            @if ($search !== '')<input type="hidden" name="q" value="{{ $search }}">@endif
-            <div class="field"><span class="label">Cari</span>
+            <div class="field grow" style="min-width:220px"><span class="label">Cari</span>
                 @if ($search !== '')
-                    <a class="btn btn-secondary search-chip" href="{{ route('employee.reports.index', array_filter(['status' => $status, 'team_id' => $teamId])) }}" title="Hapus pencarian">“{{ \Illuminate\Support\Str::limit($search, 24) }}” <x-icon name="x" :size="14" /></a>
+                    <input type="hidden" name="q" value="{{ $search }}">
+                    <div class="search-trigger is-filled"><x-icon name="search" :size="16" /><button type="button" data-search-open class="search-trigger-text">“{{ \Illuminate\Support\Str::limit($search, 40) }}”</button>
+                        <a href="{{ route('employee.reports.index', array_filter(['status' => $status, 'team_id' => $teamId])) }}" class="search-clear" title="Hapus pencarian" aria-label="Hapus pencarian"><x-icon name="x" :size="14" /></a></div>
                 @else
-                    <button type="button" class="btn btn-secondary" data-search-open><x-icon name="search" :size="16" /> Cari</button>
+                    <button type="button" class="search-trigger" data-search-open><x-icon name="search" :size="16" /> <span>No. laporan atau judul…</span></button>
                 @endif
             </div>
             <div class="field"><label class="label" for="team_id">Regu</label>
@@ -40,7 +41,7 @@
                             <td style="max-width:300px"><div class="truncate strong">{{ $r->title }}</div><div class="text-xs muted">{{ $r->categoryDisplayName() }}</div></td>
                             <td><x-team-chip :team="$r->team" /></td>
                             <td><x-badge :tone="$r->statusTone()">{{ $r->statusLabel() }}</x-badge></td>
-                            <td class="text-right"><a class="btn btn-secondary btn-sm" href="{{ route('employee.reports.show', $r) }}">Detail</a></td>
+                            <td class="text-right"><a class="btn btn-ghost btn-sm" href="{{ route('employee.reports.show', $r) }}">Detail <x-icon name="chevron-right" :size="14" /></a></td>
                         </tr>
                     @endforeach
                     </tbody>

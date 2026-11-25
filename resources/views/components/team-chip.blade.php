@@ -1,2 +1,2 @@
 @props(['team'])
-@if ($team)<span class="chip" style="background: {{ $team->hex() }}1A; color: {{ $team->hex() }}; border-color: {{ $team->hex() }}40"><x-icon :name="$team->icon" :size="13" /> {{ $team->name }}</span>@endif
+@if ($team)<span {{ $attributes->class(['chip']) }}><span class="chip-ico" style="background: {{ $team->hex() }}1F; color: {{ $team->hex() }}"><x-icon :name="$team->icon" :size="13" /></span>{{ $team->name }}</span>@endif

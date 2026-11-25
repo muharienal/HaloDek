@@ -39,14 +39,15 @@
     <form method="GET" class="card-body filters" style="padding-bottom:0" data-autosubmit>
         <input type="hidden" name="status" value="{{ $f['status'] }}">
         @if ($f['lewat'])<input type="hidden" name="lewat" value="1">@endif
-        <div class="field"><span class="label">Cari</span>
+        <div class="field grow" style="min-width:220px"><span class="label">Cari</span>
             @if ($f['q'] !== '')
-                <a class="btn btn-secondary search-chip" href="{{ route('admin.reports.index', $keep(['q' => null])) }}" title="Hapus pencarian">“{{ \Illuminate\Support\Str::limit($f['q'], 24) }}” <x-icon name="x" :size="14" /></a>
+                <input type="hidden" name="q" value="{{ $f['q'] }}">
+                <div class="search-trigger is-filled"><x-icon name="search" :size="16" /><button type="button" data-search-open class="search-trigger-text">“{{ \Illuminate\Support\Str::limit($f['q'], 40) }}”</button>
+                    <a href="{{ route('admin.reports.index', $keep(['q' => null])) }}" class="search-clear" title="Hapus pencarian" aria-label="Hapus pencarian"><x-icon name="x" :size="14" /></a></div>
             @else
-                <button type="button" class="btn btn-secondary" data-search-open><x-icon name="search" :size="16" /> Cari</button>
+                <button type="button" class="search-trigger" data-search-open><x-icon name="search" :size="16" /> <span>No. laporan, judul, pelapor…</span></button>
             @endif
         </div>
-        @if ($f['q'] !== '')<input type="hidden" name="q" value="{{ $f['q'] }}">@endif
         @php $activeFilters = collect([$f['team_id'], $f['priority'], $f['assigned'], $f['from'], $f['to']])->filter()->count(); @endphp
         <div class="field filter-toggle-wrap"><span class="label">&nbsp;</span>
             <button type="button" class="btn btn-secondary filter-toggle" data-filter-toggle aria-expanded="false"><x-icon name="filter" :size="16" /> Filter @if ($activeFilters)<span class="count">{{ $activeFilters }}</span>@endif</button></div>
@@ -80,22 +81,22 @@
                             <div class="truncate">{{ $r->title }}</div><div class="text-xs muted">{{ $r->created_at->translatedFormat('d M Y H:i') }}</div></td>
                         <td>{{ $r->reporter_name }}</td>
                         <td><x-team-chip :team="$r->team" /><div class="text-xs muted mt-1">{{ $r->categoryDisplayName() }}</div></td>
-                        <td><x-badge :tone="$r->priorityTone()" plain>{{ $r->priorityLabel() }}</x-badge></td>
+                        <td><x-priority :report="$r" /></td>
                         <td>
                             <x-badge :tone="$r->statusTone()">{{ $r->statusLabel() }}</x-badge>
                             @if (in_array($r->id, $overdueIds, true))
-                                <div class="mt-1"><span class="badge tone-red plain overdue-badge">Lewat batas</span></div>
+                                <div class="mt-1"><span class="note-flag is-red"><x-icon name="clock" :size="13" /> Lewat batas</span></div>
                             @endif
                             @if ($r->appealed_at && $r->isOpen())
-                                <div class="text-xs mt-1" style="color:#A33305">Banding pelapor</div>
+                                <div class="mt-1"><span class="note-flag is-orange"><x-icon name="flag" :size="13" /> Banding pelapor</span></div>
                             @elseif ($r->reopened_count && $r->isOpen())
-                                <div class="text-xs mt-1" style="color:#A33305">Dibuka ulang pelapor</div>
+                                <div class="mt-1"><span class="note-flag is-orange"><x-icon name="refresh" :size="13" /> Dibuka ulang</span></div>
                             @endif
                             @if ($r->resolved_at)
                                 <div class="text-xs muted mt-1">{{ $r->resolved_at->diffForHumans() }}</div>
                             @endif
                         </td>
-                        <td>@if ($r->assignee)<span class="flex items-center gap-2"><span class="avatar sm">{{ $r->assignee->initials() }}</span><span class="text-sm">{{ \Illuminate\Support\Str::words($r->assignee->name, 2, '') }}</span></span>@elseif ($r->isOpen())<span class="badge tone-amber plain">Belum ada</span>@else<span class="faint text-sm">–</span>@endif</td>
+                        <td>@if ($r->assignee)<span class="flex items-center gap-2"><span class="avatar sm">{{ $r->assignee->initials() }}</span><span class="text-sm">{{ \Illuminate\Support\Str::words($r->assignee->name, 2, '') }}</span></span>@elseif ($r->isOpen())<span class="muted text-sm">Belum ada</span>@else<span class="faint text-sm">–</span>@endif</td>
                         <td class="text-right nowrap">
                             @can('claim', $r)
 @unless ($r->assigned_to_id)
@@ -103,7 +104,7 @@
                                     <button class="btn btn-primary btn-sm" title="Ambil untuk dikerjakan">Ambil</button></form>
                             @endunless
                             @endcan
-                            <a class="btn btn-secondary btn-sm" href="{{ route('admin.reports.show', $r) }}">Buka</a>
+                            <a class="btn btn-ghost btn-sm" href="{{ route('admin.reports.show', $r) }}">Buka <x-icon name="chevron-right" :size="14" /></a>
                         </td>
                     </tr>
                 @endforeach
