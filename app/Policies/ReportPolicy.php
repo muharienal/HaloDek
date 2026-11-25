@@ -79,6 +79,12 @@ class ReportPolicy
         return $this->owns($user, $report) && $report->canStillReopen();
     }
 
+    /** Pelapor mengajukan banding atas laporan yang ditolak (sekali saja). */
+    public function appeal(User $user, Report $report): bool
+    {
+        return $this->owns($user, $report) && $report->canStillAppeal();
+    }
+
     public function cancel(User $user, Report $report): bool
     {
         return $this->owns($user, $report) && $report->status === 'menunggu';

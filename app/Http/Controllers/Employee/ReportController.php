@@ -180,8 +180,8 @@ class ReportController extends Controller
             if (! $asset) {
                 return back()->withInput()->withErrors(['asset_id' => 'Barang yang dipilih tidak tersedia untuk Anda.']);
             }
-            $data['asset_code'] = $asset['code'] ?? null;
-            $data['asset_name'] = $asset['name'] ?? null;
+            $data['asset_code'] = isset($asset['code']) ? mb_substr((string) $asset['code'], 0, 60) : null;
+            $data['asset_name'] = isset($asset['name']) ? mb_substr((string) $asset['name'], 0, 200) : null;
             // Lokasi kosong tapi barang dipilih: pakai lokasi barangnya.
             if (! $data['inventory_location_id'] && ! empty($asset['location']['id'])) {
                 $data['inventory_location_id'] = (int) $asset['location']['id'];
@@ -255,6 +255,18 @@ class ReportController extends Controller
         $this->reports->reopen($report, $request->user(), $data['reason']);
 
         return back()->with('success', 'Laporan dibuka kembali dan diteruskan ke '.($report->assignee->name ?? $report->team->name).'.');
+    }
+
+    public function appeal(Request $request, Report $report): RedirectResponse
+    {
+        $this->authorize('appeal', $report);
+
+        $data = $request->validate(['reason' => ['required', 'string', 'max:1000']], [
+            'reason.required' => 'Jelaskan alasan Anda tidak setuju dengan penolakan.',
+        ]);
+        $this->reports->appeal($report, $request->user(), $data['reason']);
+
+        return back()->with('success', 'Banding terkirim. Kepala Regu '.$report->team->name.' akan meninjau ulang laporan Anda.');
     }
 
     public function cancel(Request $request, Report $report): RedirectResponse

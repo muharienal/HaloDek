@@ -29,6 +29,8 @@ class Report extends Model
         'resolved_at' => 'datetime',
         'satisfied' => 'boolean',
         'reminded_at' => 'datetime',
+        'rejected_at' => 'datetime',
+        'appealed_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -135,6 +137,15 @@ class Report extends Model
     }
 
     /** Pelapor masih boleh membuka kembali laporan selesai selama batas hari ini belum lewat. */
+    /** Pelapor boleh banding sekali atas laporan yang ditolak, paling lama reopen_days hari setelahnya. */
+    public function canStillAppeal(): bool
+    {
+        return $this->status === 'ditolak'
+            && $this->appealed_at === null
+            && $this->rejected_at
+            && $this->rejected_at->gt(now()->subDays((int) config('halodek.reopen_days', 7)));
+    }
+
     public function canStillReopen(): bool
     {
         return $this->status === 'selesai'

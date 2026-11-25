@@ -42,6 +42,11 @@ return [
         'secret' => env('WA_SECRET', ''), // khusus Wablas bila akun memakai secret key
         'wablas_url' => env('WABLAS_URL', 'https://pati.wablas.com'), // server sesuai akun Wablas Anda
         'timeout' => 8,
+        // Manajer (WA_TO): "harian" = satu ringkasan per hari kerja; "setiap" = tiap laporan baru; "off" = tidak dikirimi.
+        'manager_mode' => env('WA_MANAJER', 'harian'),
+        'digest_at' => env('WA_RINGKASAN_JAM', '16:00'),
+        // Laporan baru dengan prioritas ini langsung dikirim ke WA Kepala Regu regu tujuannya.
+        'head_priorities' => array_values(array_filter(array_map('trim', explode(',', (string) env('WA_KEPALA_PRIORITAS', 'tinggi,mendesak'))))),
     ],
 
     /*

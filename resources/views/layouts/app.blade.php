@@ -62,12 +62,13 @@
 
             @if ($me->isSuperadmin())
                 <div class="dropdown nav-dd">
-                    <button type="button" class="nav-link {{ $act($on('admin.users.*', 'admin.audit.*')) }}" data-dropdown-toggle aria-expanded="false">
+                    <button type="button" class="nav-link {{ $act($on('admin.users.*', 'admin.audit.*', 'admin.status.*')) }}" data-dropdown-toggle aria-expanded="false">
                         Administrasi <x-icon name="chevron-down" :size="13" />
                     </button>
                     <div class="dropdown-menu">
                         <a class="dropdown-item {{ $act($on('admin.users.*')) }}" href="{{ route('admin.users.index') }}">Manajemen Pengguna</a>
                         <a class="dropdown-item {{ $act($on('admin.audit.*')) }}" href="{{ route('admin.audit.index') }}">Log Aktivitas</a>
+                        <a class="dropdown-item {{ $act($on('admin.status.*')) }}" href="{{ route('admin.status.index') }}">Status Sistem</a>
                     </div>
                 </div>
             @endif
@@ -199,6 +200,7 @@
             @if ($me->isSuperadmin())
                 <a class="tile {{ $act($on('admin.users.*')) }}" href="{{ route('admin.users.index') }}"><span class="tile-ico tone-violet"><x-icon name="user" :size="22" /></span>Pengguna</a>
                 <a class="tile {{ $act($on('admin.audit.*')) }}" href="{{ route('admin.audit.index') }}"><span class="tile-ico tone-gray"><x-icon name="history" :size="22" /></span>Log Aktivitas</a>
+                <a class="tile {{ $act($on('admin.status.*')) }}" href="{{ route('admin.status.index') }}"><span class="tile-ico tone-teal"><x-icon name="server" :size="22" /></span>Status Sistem</a>
             @endif
         </div>
     @endif

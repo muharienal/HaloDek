@@ -85,9 +85,11 @@ class UserController extends Controller
         }
 
         // Pengelola yang masih memegang laporan aktif tidak boleh dipindah regu / diturunkan dulu.
-        $leavingTeam = $user->team_id && ($data['team_id'] ?? null) !== $user->team_id;
-        if (($leavingTeam || $data['role'] === User::ROLE_KARYAWAN) && $user->assignedReports()->whereIn('status', Report::OPEN_STATUSES)->exists()) {
-            return back()->with('error', "{$user->name} masih memegang laporan aktif. Tugaskan ulang atau lepas laporannya dulu sebelum mengubah regu/role.");
+        // Begitu juga yang dinonaktifkan atau diberi peran yang tidak bisa menangani laporan (Karyawan/Manajer).
+        $leavingTeam = $user->team_id && (int) ($data['team_id'] ?? 0) !== (int) $user->team_id;
+        $cannotHandle = ! in_array($data['role'], [User::ROLE_SUPERADMIN, User::ROLE_KEPALA_REGU, User::ROLE_STAF], true);
+        if (($leavingTeam || $cannotHandle || ! $data['is_active']) && ($msg = $this->openTasksBlock($user, 'mengubah regu, peran, atau status akunnya'))) {
+            return back()->with('error', $msg);
         }
 
         // Naik dari Karyawan ke pengelola: wajib punya password sementara acak.
@@ -137,6 +139,10 @@ class UserController extends Controller
             return back()->with('error', 'Harus ada minimal satu Superadmin aktif.');
         }
 
+        if ($user->is_active && ($msg = $this->openTasksBlock($user, 'menonaktifkannya'))) {
+            return back()->with('error', $msg);
+        }
+
         $user->update(['is_active' => ! $user->is_active]);
         Audit::log('user.toggle', ($user->is_active ? 'Mengaktifkan' : 'Menonaktifkan')." pengguna {$user->name}.", $user);
 
@@ -153,10 +159,27 @@ class UserController extends Controller
             return back()->with('error', 'Harus ada minimal satu Superadmin aktif.');
         }
 
+        if ($msg = $this->openTasksBlock($user, 'menghapusnya')) {
+            return back()->with('error', $msg);
+        }
+
         Audit::log('user.delete', "Menghapus pengguna {$user->name} ({$user->nik}).", $user);
         $user->delete(); // laporan tetap ada (nama pelapor tersimpan sebagai snapshot)
 
         return back()->with('success', 'Pengguna dihapus. Riwayat laporannya tetap tersimpan.');
+    }
+
+    /**
+     * Laporan aktif yang dipegang seseorang harus dialihkan dulu; kalau tidak, laporannya macet
+     * atas nama orang yang tidak bisa lagi menanganinya.
+     */
+    private function openTasksBlock(User $user, string $action): ?string
+    {
+        $open = $user->assignedReports()->whereIn('status', Report::OPEN_STATUSES)->count();
+
+        return $open > 0
+            ? "{$user->name} masih memegang {$open} laporan aktif. Tugaskan ulang atau lepas laporannya dulu sebelum {$action}."
+            : null;
     }
 
     public function template(): StreamedResponse

@@ -185,11 +185,15 @@ class ReportController extends Controller
                 continue;
             }
 
-            match ($data['action']) {
-                'ambil' => $this->reports->claim($report, $user),
-                'tugaskan' => $this->reports->followUp($report, $user, ['assigned_to_id' => $assignee->id]),
-                default => $this->reports->followUp($report, $user, ['status' => $data['action'], 'follow_up_note' => $data['bulk_note']]),
-            };
+            try {
+                match ($data['action']) {
+                    'ambil' => $this->reports->claim($report, $user),
+                    'tugaskan' => $this->reports->followUp($report, $user, ['assigned_to_id' => $assignee->id]),
+                    default => $this->reports->followUp($report, $user, ['status' => $data['action'], 'follow_up_note' => $data['bulk_note']]),
+                };
+            } catch (\App\Exceptions\ReportConflict) {
+                continue; // keadaannya berubah di tengah jalan (mis. baru diambil orang lain): lewati
+            }
             $done++;
         }
 

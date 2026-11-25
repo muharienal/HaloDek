@@ -13,6 +13,7 @@
         <x-badge :tone="$report->statusTone()">{{ $report->statusLabel() }}</x-badge>
         <x-badge :tone="$report->priorityTone()" plain>Prioritas {{ $report->priorityLabel() }}</x-badge>
         @if ($report->reopened_count)<x-badge tone="orange" plain>Dibuka ulang {{ $report->reopened_count }}×</x-badge>@endif
+        @if ($report->appealed_at)<x-badge tone="orange" plain>Banding</x-badge>@endif
     </div>
     @php $canClose = $report->isOpen() && $me->can('manage', $report); @endphp
     @if ($me->can('claim', $report) || $canClose || $me->can('release', $report))

@@ -89,7 +89,7 @@ return [
     'string' => ':attribute harus berupa teks.',
     'timezone' => ':attribute harus berupa zona waktu yang valid.',
     'unique' => ':attribute sudah digunakan.',
-    'uploaded' => ':attribute gagal diunggah.',
+    'uploaded' => ':attribute gagal diunggah. Ukurannya mungkin melebihi batas server ('.ini_get('upload_max_filesize').' per berkas).',
     'url' => 'Format :attribute tidak valid.',
 
     'custom' => [],

@@ -676,3 +676,13 @@ a.cat-hit { text-decoration: none; }
 .quick-note { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: #F6F8FC; color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .quick-note:hover, .quick-note:focus-visible { border-color: var(--blue); background: #EEF4FF; outline: none; }
 .team-pills > span { flex-basis: 100%; }
+
+/* ---------- status sistem ---------- */
+.status-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); align-items: start; }
+.status-grid .card { margin: 0; }
+.status-list { list-style: none; margin: 0; padding: 4px 20px 12px; }
+.status-list li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.status-list li:first-child { border-top: 0; }
+.status-label { font-weight: 700; color: var(--ink); }
+.status-detail { grid-column: 1 / -1; margin: 0; font-size: 13.5px; color: var(--muted); overflow-wrap: anywhere; }
+.mono-wrap { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; overflow-wrap: anywhere; word-break: break-word; }

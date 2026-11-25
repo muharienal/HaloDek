@@ -6,7 +6,9 @@ use App\Services\Maintenance;
 use App\Services\OverdueReminder;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 /**
  * Pengganti Task Scheduler: setelah halaman terkirim ke pengguna, jalankan tugas latar
@@ -22,7 +24,19 @@ class RunBackgroundTasks
 
     public function terminate(Request $request, Response $response): void
     {
-        app(OverdueReminder::class)->tick();
-        app(Maintenance::class)->tick();
+        // Permintaan API (dari Inventaris) dibalas secepatnya: tanpa tugas latar, supaya kedua
+        // aplikasi tidak saling menunggu bila berjalan di satu Apache (mod_php menahan koneksi
+        // sampai tugas selesai).
+        if ($request->is('api/*')) {
+            return;
+        }
+
+        foreach ([OverdueReminder::class, Maintenance::class, \App\Services\DailyDigest::class] as $task) {
+            try {
+                app($task)->tick();
+            } catch (Throwable $e) {
+                Log::warning('Tugas latar gagal', ['task' => class_basename($task), 'error' => $e->getMessage()]);
+            }
+        }
     }
 }

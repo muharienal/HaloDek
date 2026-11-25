@@ -66,6 +66,7 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
         Route::patch('/{report}/batal', [Employee\ReportController::class, 'cancel'])->name('cancel');
         Route::patch('/{report}/beres', [Employee\ReportController::class, 'confirm'])->name('confirm');
         Route::patch('/{report}/buka-lagi', [Employee\ReportController::class, 'reopen'])->middleware('throttle:submit')->name('reopen');
+        Route::patch('/{report}/banding', [Employee\ReportController::class, 'appeal'])->middleware('throttle:submit')->name('appeal');
     });
 
     // ===== AREA PENGELOLA (Superadmin, Manajer, Kepala Regu, Staf Regu) =====
@@ -128,6 +129,8 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
             Route::delete('/pengguna/{user}', [Admin\UserController::class, 'destroy'])->name('users.destroy');
 
             Route::get('/audit', [Admin\AuditLogController::class, 'index'])->name('audit.index');
+            Route::get('/status', [Admin\SystemStatusController::class, 'index'])->name('status.index');
+            Route::post('/status/uji-wa', [Admin\SystemStatusController::class, 'testWhatsApp'])->middleware('throttle:6,1')->name('status.wa-test');
         });
     });
 });

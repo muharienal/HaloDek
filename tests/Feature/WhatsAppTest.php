@@ -24,7 +24,7 @@ class WhatsAppTest extends TestCase
     public function test_fonnte_sends_only_on_new_report_with_link(): void
     {
         $this->seedTeams();
-        config(['services.whatsapp' => ['driver' => 'fonnte', 'to' => '62811111', 'token' => 'tok', 'secret' => '', 'wablas_url' => 'https://x.test', 'timeout' => 5]]);
+        config(['services.whatsapp' => ['driver' => 'fonnte', 'to' => '62811111', 'token' => 'tok', 'secret' => '', 'wablas_url' => 'https://x.test', 'timeout' => 5, 'manager_mode' => 'setiap']]);
         Http::fake(['api.fonnte.com/*' => Http::response(['status' => true])]);
 
         $this->submit();
@@ -40,7 +40,7 @@ class WhatsAppTest extends TestCase
     public function test_wablas_driver_and_failure_does_not_break_report(): void
     {
         $this->seedTeams();
-        config(['services.whatsapp' => ['driver' => 'wablas', 'to' => '62811111', 'token' => 'tok', 'secret' => 'sec', 'wablas_url' => 'https://w.test', 'timeout' => 5]]);
+        config(['services.whatsapp' => ['driver' => 'wablas', 'to' => '62811111', 'token' => 'tok', 'secret' => 'sec', 'wablas_url' => 'https://w.test', 'timeout' => 5, 'manager_mode' => 'setiap']]);
         Http::fake(['w.test/*' => Http::response('err', 500)]);
 
         $this->submit();
@@ -85,6 +85,75 @@ class WhatsAppTest extends TestCase
         $this->submit();
         $other = \App\Models\Report::where('id', '!=', $report->id)->firstOrFail();
         $this->get(route('reports.public.photo', ['report' => $other->id, 'token' => $other->publicToken(), 'attachment' => $att->id]))->assertNotFound();
+    }
+
+    private function waConfig(array $extra = []): void
+    {
+        config(['services.whatsapp' => $extra + ['driver' => 'fonnte', 'to' => '62811111', 'token' => 'tok', 'secret' => '', 'wablas_url' => 'https://x.test',
+            'timeout' => 5, 'manager_mode' => 'harian', 'digest_at' => '16:00', 'head_priorities' => ['tinggi', 'mendesak']]]);
+        Http::fake(['api.fonnte.com/*' => Http::response(['status' => true])]);
+    }
+
+    private function submitWith(string $priority): void
+    {
+        $team = Team::where('slug', 'it')->first();
+        $this->actingAs($this->user())->post(route('employee.reports.store'), [
+            'team_id' => $team->id, 'category_id' => Category::where('team_id', $team->id)->value('id'),
+            'priority' => $priority, 'title' => 'Server mati', 'description' => 'Semua tidak bisa akses',
+        ])->assertRedirect();
+    }
+
+    public function test_daily_mode_manager_gets_no_message_per_report(): void
+    {
+        $this->seedTeams();
+        $this->waConfig();
+        $this->submitWith('sedang');
+        Http::assertNothingSent();
+    }
+
+    public function test_high_priority_goes_to_team_head_with_fallback_to_manager(): void
+    {
+        $this->seedTeams();
+        $head = $this->user(\App\Models\User::ROLE_KEPALA_REGU, 'it', ['phone' => '081299990000']);
+        $this->waConfig();
+
+        $this->submitWith('mendesak');
+        Http::assertSent(fn ($r) => $r['target'] === '6281299990000' && str_contains($r['message'], 'LAPORAN MENDESAK MASUK') && str_contains($r['message'], '/admin/laporan/'));
+        Http::assertSentCount(1);
+
+        // Kepala Regu belum mengisi nomor: dikirim ke WA_TO agar tidak hilang.
+        $head->update(['phone' => null]);
+        $this->waConfig();
+        $this->submitWith('tinggi');
+        Http::assertSent(fn ($r) => $r['target'] === '62811111' && str_contains($r['message'], 'LAPORAN TINGGI MASUK'));
+    }
+
+    public function test_daily_digest_sent_once_after_set_time_on_workday(): void
+    {
+        $this->seedTeams();
+        \Illuminate\Support\Carbon::setTestNow('2026-11-16 10:00'); // Senin
+        $this->waConfig();
+        $this->submitWith('sedang');
+        $this->submitWith('mendesak');
+
+        $this->actingAs($this->user())->get(route('dashboard'));
+        Http::assertNotSent(fn ($r) => str_contains($r['message'], 'RINGKASAN'));
+
+        \Illuminate\Support\Carbon::setTestNow('2026-11-16 16:05');
+        $this->actingAs($this->user())->get(route('dashboard'));
+        Http::assertSent(fn ($r) => $r['target'] === '62811111' && str_contains($r['message'], 'RINGKASAN HALODEK')
+            && str_contains($r['message'], 'Laporan baru: 2') && str_contains($r['message'], 'Server mati'));
+
+        // Tidak dikirim dua kali di hari yang sama.
+        Http::fake(['api.fonnte.com/*' => Http::response(['status' => true])]);
+        $this->actingAs($this->user())->get(route('dashboard'));
+        Http::assertNothingSent();
+
+        // Sabtu bukan hari kerja.
+        \Illuminate\Support\Carbon::setTestNow('2026-11-21 17:00');
+        $this->actingAs($this->user())->get(route('dashboard'));
+        Http::assertNothingSent();
+        \Illuminate\Support\Carbon::setTestNow();
     }
 
     public function test_off_driver_sends_nothing(): void

@@ -45,6 +45,18 @@
                 @elseif ($report->satisfied && auth()->user()->can('reopen', $report))
                     <div class="card-foot text-sm muted">Anda menandai laporan ini sudah beres. Masalahnya muncul lagi? <button type="button" class="link-btn strong" data-modal-open="reopen-modal">Buka kembali</button></div>
                 @endcan
+                {{-- Ditolak: pelapor boleh banding sekali, ditinjau ulang Kepala Regu. --}}
+                @if ($report->status === 'ditolak')
+                    @can('appeal', $report)
+                        <div class="card-foot" style="display:grid;gap:10px">
+                            <div><p class="strong" style="margin:0">Tidak setuju dengan penolakan ini?</p>
+                                <p class="text-sm muted" style="margin:4px 0 0">Ajukan banding sekali. Kepala Regu {{ $report->team->name }} akan meninjau ulang laporan Anda.</p></div>
+                            <div><button type="button" class="btn btn-secondary" data-modal-open="appeal-modal">Ajukan banding</button></div>
+                        </div>
+                    @elseif ($report->appealed_at)
+                        <div class="card-foot text-sm muted">Banding sudah diajukan {{ $report->appealed_at->translatedFormat('d M Y') }} dan laporan ditolak kembali setelah ditinjau. Keputusan ini final.</div>
+                    @endcan
+                @endif
             </div>
         @endif
 
@@ -102,6 +114,22 @@
 @endsection
 
 @push('modals')
+    @can('appeal', $report)
+        <div class="modal" id="appeal-modal" role="dialog" aria-modal="true" aria-labelledby="appeal-title">
+            <div class="modal-dialog sm">
+                <form method="POST" action="{{ route('employee.reports.appeal', $report) }}">
+                    @csrf @method('PATCH')
+                    <input type="hidden" name="_modal" value="appeal-modal">
+                    <div class="modal-head"><h3 id="appeal-title">Ajukan Banding</h3><button type="button" class="btn btn-ghost btn-icon" data-modal-close aria-label="Tutup"><x-icon name="x" :size="18" /></button></div>
+                    <div class="modal-body" style="display:grid;gap:12px">
+                        <x-textarea name="reason" label="Mengapa laporan ini perlu ditinjau ulang?" rows="4" maxlength="1000" required placeholder="Mis. Printer bukan milik pribadi, dipakai bersama di ruang Keuangan." />
+                        <p class="hint" style="margin:0">Banding hanya bisa diajukan sekali, paling lama {{ config('halodek.reopen_days') }} hari setelah laporan ditolak.</p>
+                    </div>
+                    <div class="modal-foot"><button type="button" class="btn btn-secondary" data-modal-close>Batal</button><button class="btn btn-primary">Kirim Banding</button></div>
+                </form>
+            </div>
+        </div>
+    @endcan
     @can('reopen', $report)
         <div class="modal" id="reopen-modal" role="dialog" aria-modal="true" aria-labelledby="reopen-title">
             <div class="modal-dialog sm">

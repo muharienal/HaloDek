@@ -6,6 +6,8 @@ use App\Models\Report;
 use App\Models\Team;
 use App\Models\User;
 use App\Models\UserNotification;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class NotificationService
 {
@@ -16,12 +18,18 @@ class NotificationService
             return;
         }
 
-        UserNotification::create([
-            'user_id' => $id,
-            'report_id' => $report?->id,
-            'title' => $title,
-            'message' => $message,
-        ]);
+        // Notifikasi hanya pelengkap: kegagalannya tidak boleh membatalkan aksi utama
+        // (mis. laporan sudah tersimpan lalu pengguna melihat error dan mengirim ulang).
+        try {
+            UserNotification::create([
+                'user_id' => $id,
+                'report_id' => $report?->id,
+                'title' => mb_substr($title, 0, 255),
+                'message' => mb_substr($message, 0, 2000),
+            ]);
+        } catch (Throwable $e) {
+            Log::warning('Notifikasi gagal disimpan', ['user' => $id, 'report' => $report?->id, 'error' => $e->getMessage()]);
+        }
     }
 
     /** Beritahu Kepala Regu (cadangan: Superadmin bila regu belum punya kepala aktif). */

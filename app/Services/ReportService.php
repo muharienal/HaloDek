@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\ReportConflict;
 use App\Models\Category;
 use App\Models\Report;
 use App\Models\ReportActivity;
@@ -74,15 +75,20 @@ class ReportService
             }
         }
 
-        $this->notify->toTeam(
-            $team,
-            'Laporan baru '.$report->report_number,
-            "{$user->name} mengajukan: \"{$report->title}\" (prioritas {$report->priorityLabel()}).",
-            $report,
-            [$user->id],
-        );
-
-        app(WhatsAppNotifier::class)->newReport($report);
+        // Laporan sudah tersimpan. Notifikasi tidak boleh membuat pengguna melihat error
+        // (yang membuatnya mengirim ulang laporan yang sama).
+        try {
+            $this->notify->toTeam(
+                $team,
+                'Laporan baru '.$report->report_number,
+                "{$user->name} mengajukan: \"{$report->title}\" (prioritas {$report->priorityLabel()}).",
+                $report,
+                [$user->id],
+            );
+            app(WhatsAppNotifier::class)->newReport($report);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Notifikasi laporan baru gagal', ['report' => $report->report_number, 'error' => $e->getMessage()]);
+        }
 
         return $report;
     }
@@ -112,6 +118,11 @@ class ReportService
     public function followUp(Report $report, User $actor, array $data, array $files = []): Report
     {
         DB::transaction(function () use ($report, $actor, $data, $files) {
+            $this->lockFresh($report);
+            if ($report->status === 'dibatalkan') {
+                throw new ReportConflict('Laporan ini sudah dibatalkan pelapor sehingga tidak dapat diubah lagi.');
+            }
+
             $changes = [];
             $now = now();
 
@@ -150,12 +161,28 @@ class ReportService
                 if ($report->status === 'selesai') {
                     $report->resolved_at = $now;
                     $report->satisfied = null; // pelapor ditanya lagi "sudah beres?"
+                } elseif ($report->status === 'ditolak') {
+                    $report->rejected_at = $now; // awal batas waktu banding
                 } elseif (in_array($report->status, Report::OPEN_STATUSES, true)) {
                     $report->resolved_at = null; // dibuka kembali
                 }
 
                 $note = trim((string) ($data['follow_up_note'] ?? ''));
                 $this->log($report, $actor, 'status', "Status diubah dari {$old} menjadi {$report->statusLabel()}.", $note !== '' ? ['note' => $note] : null);
+            }
+
+            // --- jaga status dan penanggung jawab tetap selaras:
+            //     "Menunggu" = belum ada yang memegang; PJ dilepas saat "Diproses" = kembali menunggu.
+            if ($report->status === 'menunggu' && $report->assigned_to_id && in_array('assigned', $changes, true)) {
+                $report->status = 'diproses'; // baru saja ditugaskan ke seseorang: berarti sedang diproses
+                $statusChanged = $report->isDirty('status');
+            } elseif ($report->status === 'menunggu' && $report->assigned_to_id) {
+                $report->assigned_to_id = null;
+                $report->reminded_at = null;
+                $this->log($report, $actor, 'released', 'Penanggung jawab dilepas karena status dikembalikan ke Menunggu.');
+            } elseif ($report->status === 'diproses' && ! $report->assigned_to_id && in_array('assigned', $changes, true)) {
+                $report->status = 'menunggu';
+                $statusChanged = $report->isDirty('status');
             }
 
             // --- catatan tanpa perubahan status tetap tersimpan sebagai update
@@ -200,6 +227,10 @@ class ReportService
         $from = $report->team;
 
         DB::transaction(function () use ($report, $actor, $to, $category, $reason, $from) {
+            $this->lockFresh($report);
+            if (! $report->isOpen()) {
+                throw new ReportConflict("Laporan {$report->report_number} sudah {$report->statusLabel()} sehingga tidak bisa dialihkan.");
+            }
             $report->team_id = $to->id;
             $report->category_id = $category->id;
             $report->custom_category = null;
@@ -266,6 +297,10 @@ class ReportService
     public function cancel(Report $report, User $actor, ?string $reason = null): Report
     {
         DB::transaction(function () use ($report, $actor, $reason) {
+            $this->lockFresh($report);
+            if ($report->status !== 'menunggu') {
+                throw new ReportConflict("Laporan sudah {$report->statusLabel()} oleh petugas sehingga tidak bisa dibatalkan lagi. Kirim balasan bila sudah tidak diperlukan.");
+            }
             $report->update(['status' => 'dibatalkan']);
             $this->log($report, $actor, 'cancelled', 'Laporan dibatalkan oleh pelapor.'.($reason ? " Alasan: {$reason}" : ''));
         });
@@ -319,12 +354,57 @@ class ReportService
         return $report->refresh();
     }
 
+    /**
+     * Banding pelapor atas laporan yang ditolak: kembali ke antrean regu dan Kepala Regu diberi tahu.
+     * Hanya sekali; penolakan berikutnya bersifat final.
+     */
+    public function appeal(Report $report, User $actor, string $reason): Report
+    {
+        DB::transaction(function () use ($report, $actor, $reason) {
+            $this->lockFresh($report);
+            if (! $report->canStillAppeal()) {
+                throw new ReportConflict('Banding untuk laporan ini sudah tidak bisa diajukan.');
+            }
+
+            $report->forceFill([
+                'status' => 'menunggu',
+                'assigned_to_id' => null,
+                'appealed_at' => now(),
+                'resolved_at' => null,
+                'follow_up_note' => null, // alasan penolakan tetap tercatat di riwayat
+                'reminded_at' => null,
+            ])->save();
+            $this->log($report, $actor, 'appealed', 'Pelapor mengajukan banding atas penolakan. Laporan kembali menunggu keputusan Kepala Regu.', ['note' => $reason]);
+        });
+
+        $report->loadMissing('team');
+        $title = 'Banding laporan '.$report->report_number;
+        $this->notify->toHead($report->team, $title, "{$actor->name}: \"".str($reason)->limit(120).'"', $report, [$actor->id]);
+        app(WhatsAppNotifier::class)->headAlert($report, 'BANDING LAPORAN DITOLAK', $reason);
+
+        return $report->refresh();
+    }
+
     // ------------------------------------------------- ambil / lepas tugas
 
     /** Petugas mengambil laporan untuk dikerjakan sendiri (status otomatis "diproses"). */
     public function claim(Report $report, User $actor): Report
     {
         DB::transaction(function () use ($report, $actor) {
+            // Dua orang menekan "Ambil" bersamaan: baris dikunci lalu dicek ulang,
+            // sehingga yang kedua mendapat pesan, bukan menimpa yang pertama.
+            $assignedBefore = $report->assigned_to_id;
+            $this->lockFresh($report);
+            if (! $report->isOpen()) {
+                throw new ReportConflict("Laporan {$report->report_number} sudah {$report->statusLabel()}.");
+            }
+            if ($report->assigned_to_id && $report->assigned_to_id !== $assignedBefore && $report->assigned_to_id !== $actor->id) {
+                throw new ReportConflict("Laporan {$report->report_number} baru saja diambil ".($report->assignee->name ?? 'petugas lain').'.');
+            }
+            if ($report->assigned_to_id === $actor->id) {
+                return; // sudah dipegang sendiri
+            }
+
             $previous = $report->assignee;
             $report->assigned_to_id = $actor->id;
             if ($report->status === 'menunggu') {
@@ -370,6 +450,17 @@ class ReportService
     }
 
     // ------------------------------------------------------------- internal
+
+    /** Kunci baris laporan (sampai transaksi selesai) dan muat ulang datanya dari database. */
+    private function lockFresh(Report $report): void
+    {
+        $fresh = Report::whereKey($report->id)->lockForUpdate()->first();
+        if (! $fresh) {
+            throw new ReportConflict('Laporan ini sudah dihapus.');
+        }
+        $report->setRawAttributes($fresh->getAttributes(), true);
+        $report->unsetRelation('assignee');
+    }
 
     private function log(Report $report, ?User $user, string $type, ?string $message, ?array $meta = null, bool $internal = false): ReportActivity
     {

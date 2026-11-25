@@ -30,6 +30,12 @@ class Handler extends ExceptionHandler
             //
         });
 
+        $this->renderable(function (ReportConflict $e, Request $request): ?Response {
+            return $request->expectsJson()
+                ? response()->json(['message' => $e->getMessage()], 409)
+                : redirect()->back(fallback: route('dashboard'))->withInput()->with('error', $e->getMessage());
+        });
+
         // 419 (token CSRF kedaluwarsa) jangan berakhir di halaman error.
         // Pengguna diarahkan kembali dengan token baru dan pesan yang ramah.
         $this->renderable(function (HttpException $e, Request $request): ?Response {

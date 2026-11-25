@@ -86,7 +86,9 @@
                             @if (in_array($r->id, $overdueIds, true))
                                 <div class="mt-1"><span class="badge tone-red plain overdue-badge">Lewat batas</span></div>
                             @endif
-                            @if ($r->reopened_count && $r->isOpen())
+                            @if ($r->appealed_at && $r->isOpen())
+                                <div class="text-xs mt-1" style="color:#A33305">Banding pelapor</div>
+                            @elseif ($r->reopened_count && $r->isOpen())
                                 <div class="text-xs mt-1" style="color:#A33305">Dibuka ulang pelapor</div>
                             @endif
                             @if ($r->resolved_at)

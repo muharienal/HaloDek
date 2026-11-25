@@ -37,6 +37,7 @@ class ReportActivity extends Model
             'cancelled' => 'x-circle',
             'confirmed' => 'check-circle',
             'reopened' => 'refresh',
+            'appealed' => 'flag',
             default => 'dot',
         };
     }

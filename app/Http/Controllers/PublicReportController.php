@@ -26,7 +26,7 @@ class PublicReportController extends Controller
 
         $activities = $report->activities()
             ->where('is_internal', false)
-            ->whereIn('type', ['created', 'status', 'assigned', 'claimed', 'released', 'priority', 'transferred', 'cancelled'])
+            ->whereIn('type', ['created', 'status', 'assigned', 'claimed', 'released', 'priority', 'transferred', 'cancelled', 'appealed'])
             ->get();
 
         $photos = $report->attachments()->whereIn('kind', self::PUBLIC_KINDS)->where('mime', 'like', 'image/%')->orderBy('id')->get();

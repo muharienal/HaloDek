@@ -37,8 +37,11 @@ class ScanController extends Controller
             return redirect()->away($inventory->assetWebUrl($item) ?? route('admin.reports.index'));
         }
 
-        if (empty($asset['active']) || ! $team) {
+        if (empty($asset['active'])) {
             return redirect()->route('dashboard')->with('error', "Barang {$asset['code']} sudah tidak aktif. Silakan ajukan laporan biasa bila masih ada kendala.");
+        }
+        if (! $team) {
+            return redirect()->route('employee.reports.create')->with('error', "Regu untuk barang {$asset['code']} belum tersedia di HaloDek. Silakan pilih regu dan isi laporan secara manual.");
         }
 
         // Izinkan barang ini dipilih di form lapor (lihat Employee\ReportController::itemOptions).

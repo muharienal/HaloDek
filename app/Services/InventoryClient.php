@@ -54,9 +54,7 @@ class InventoryClient
             return [];
         }
 
-        $rows = array_values(array_map(fn ($l) => [
-            'id' => (int) $l['id'], 'name' => (string) $l['name'], 'label' => (string) ($l['label'] ?? $l['name']),
-        ], $rows));
+        $rows = array_values(array_filter(array_map(fn ($l) => self::cleanLocation($l), $rows)));
         Cache::put('inventaris:locations', $rows, now()->addMinutes(10));
 
         return $rows;
@@ -90,18 +88,63 @@ class InventoryClient
             return [];
         }
 
-        return $this->get('assets', array_filter([
+        $rows = $this->get('assets', array_filter([
             'unit' => $unit,
             'holder_nik' => $holderNik,
             'location_id' => $locationId,
             'include_id' => $includeId,
         ])) ?? [];
+
+        return array_values(array_filter(array_map(fn ($a) => self::cleanAsset($a), $rows)));
     }
 
     /** @return array<string, mixed>|null */
     public function asset(int $id): ?array
     {
-        return $this->enabled() ? $this->get('assets/'.$id) : null;
+        return $this->enabled() ? self::cleanAsset($this->get('assets/'.$id)) : null;
+    }
+
+    /**
+     * Data dari aplikasi lain tidak dipercaya mentah-mentah: baris tanpa id/nama dibuang,
+     * tipe disamakan, dan teks dipotong sesuai panjang kolom laporan (reports.*).
+     *
+     * @return array{id:int, name:string, label:string}|null
+     */
+    private static function cleanLocation(mixed $l): ?array
+    {
+        if (! is_array($l) || ! is_numeric($l['id'] ?? null) || (int) $l['id'] < 1 || ! is_scalar($l['name'] ?? null) || trim((string) $l['name']) === '') {
+            return null;
+        }
+        $name = mb_substr(trim((string) $l['name']), 0, 200);
+        $label = is_scalar($l['label'] ?? null) && trim((string) $l['label']) !== '' ? trim((string) $l['label']) : $name;
+
+        return ['id' => (int) $l['id'], 'name' => $name, 'label' => mb_substr($label, 0, 200)];
+    }
+
+    /** @return array<string, mixed>|null */
+    private static function cleanAsset(mixed $a): ?array
+    {
+        if (! is_array($a) || ! is_numeric($a['id'] ?? null) || (int) $a['id'] < 1) {
+            return null;
+        }
+        $str = fn ($v, int $max) => is_scalar($v) && trim((string) $v) !== '' ? mb_substr(trim((string) $v), 0, $max) : null;
+
+        $code = $str($a['code'] ?? null, 60) ?? '#'.(int) $a['id'];
+        $name = $str($a['name'] ?? null, 200) ?? $code;
+
+        return [
+            'id' => (int) $a['id'],
+            'code' => $code,
+            'name' => $name,
+            'label' => $str($a['label'] ?? null, 300) ?? $code.' – '.$name,
+            'unit' => $str($a['unit'] ?? null, 60),
+            'category' => $str($a['category'] ?? null, 150),
+            'status' => $str($a['status'] ?? null, 30),
+            'active' => (bool) ($a['active'] ?? false),
+            'location' => self::cleanLocation($a['location'] ?? null),
+            'holder' => is_array($a['holder'] ?? null) ? ['nik' => $str($a['holder']['nik'] ?? null, 40), 'name' => $str($a['holder']['name'] ?? null, 150)] : null,
+            'url' => $str($a['url'] ?? null, 500),
+        ];
     }
 
     /**

@@ -11,6 +11,13 @@ abstract class TestCase extends BaseTestCase
 {
     use CreatesApplication;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Tes tidak boleh menghubungi server sungguhan (Fonnte, Inventaris).
+        \Illuminate\Support\Facades\Http::preventStrayRequests();
+    }
+
     /**
      * Beberapa pengguna dipakai bergantian dalam satu tes: hapus hash password sesi milik
      * pengguna sebelumnya agar AuthenticateSession tidak menganggapnya sesi yang dibajak.

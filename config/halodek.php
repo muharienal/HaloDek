@@ -8,6 +8,17 @@
 | supaya tidak tersebar di banyak file.
 */
 
+// Batas unggah per berkas mengikuti php.ini bila lebih kecil (Laragon bawaan: 2 MB),
+// supaya pesan di form sesuai dan foto tidak "hilang" diam-diam oleh PHP.
+$phpUploadKb = (static function (): int {
+    $v = trim((string) ini_get('upload_max_filesize'));
+    $n = (float) $v;
+
+    return (int) match (strtolower(substr($v, -1))) {
+        'g' => $n * 1048576, 'm' => $n * 1024, 'k' => $n, default => $n / 1024,
+    };
+})();
+
 return [
 
     'name' => 'HaloDek',
@@ -115,7 +126,7 @@ return [
 
     'attachments' => [
         'max_files' => 5,
-        'max_kb' => 3072,
+        'max_kb' => $phpUploadKb > 0 ? min(3072, $phpUploadKb) : 3072,
         'mimes' => ['jpg', 'jpeg', 'png', 'webp'], // hanya foto
     ],
 

@@ -15,15 +15,131 @@ use Throwable;
  */
 class WhatsAppNotifier
 {
+    /**
+     * Laporan baru:
+     *  - prioritas tinggi/mendesak (WA_KEPALA_PRIORITAS) -> Kepala Regu regu tujuan (cadangan: WA_TO);
+     *  - manajer (WA_TO) hanya bila WA_MANAJER=setiap; bawaannya ringkasan harian (DailyDigest).
+     */
     public function newReport(Report $report): void
     {
         $cfg = config('services.whatsapp');
-        if (! $this->enabled($cfg) || trim((string) $cfg['to']) === '') {
+        if (! $this->enabled($cfg)) {
             return;
         }
 
-        $targets = array_filter(array_map(fn ($n) => \App\Support\Phone::normalize($n) ?? trim($n), explode(',', (string) $cfg['to'])));
-        $this->queue($targets, $this->message($report));
+        try {
+            $sent = [];
+            if (in_array($report->priority, $this->headPriorities($cfg), true)) {
+                $sent = $this->headAlert($report, 'LAPORAN '.mb_strtoupper($report->priorityLabel()).' MASUK');
+            }
+
+            if (($cfg['manager_mode'] ?? 'harian') === 'setiap') {
+                $targets = array_values(array_diff($this->managerNumbers($cfg), $sent));
+                if ($targets) {
+                    $this->queue($targets, $this->message($report));
+                }
+            }
+        } catch (Throwable $e) {
+            Log::warning('Notifikasi WhatsApp laporan baru gagal disiapkan: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Pesan penting untuk Kepala Regu regu laporan (nomor dari profilnya). Bila belum ada Kepala Regu
+     * dengan nomor WA, dikirim ke WA_TO agar tidak hilang. Mengembalikan nomor tujuan.
+     *
+     * @return array<int, string>
+     */
+    public function headAlert(Report $report, string $headline, ?string $note = null): array
+    {
+        $cfg = config('services.whatsapp');
+        if (! $this->enabled($cfg)) {
+            return [];
+        }
+
+        try {
+            $report->loadMissing(['team', 'user', 'category']);
+            $targets = \App\Models\User::active()->where('team_id', $report->team_id)->where('role', \App\Models\User::ROLE_KEPALA_REGU)
+                ->get()->map->waNumber()->filter()->unique()->values()->all();
+            if (! $targets) {
+                $targets = $this->managerNumbers($cfg);
+            }
+            if ($targets) {
+                $this->queue($targets, $this->headMessage($report, $headline, $note));
+            }
+
+            return $targets;
+        } catch (Throwable $e) {
+            Log::warning('Notifikasi WhatsApp Kepala Regu gagal disiapkan: '.$e->getMessage());
+
+            return [];
+        }
+    }
+
+    public function headMessage(Report $report, string $headline, ?string $note = null): string
+    {
+        $report->loadMissing(['team', 'user', 'category']);
+        $desc = trim(preg_replace('/\s+/', ' ', (string) ($note ?? $report->description)));
+        $desc = mb_strlen($desc) > 200 ? mb_substr($desc, 0, 200).'…' : $desc;
+
+        $lines = [
+            '*'.$headline.'*',
+            '',
+            '*'.mb_strtoupper($report->title).'*',
+            'No. laporan: '.$report->report_number,
+            'Regu: Regu '.($report->team->name ?? '-'),
+            'Prioritas: '.$report->priorityLabel(),
+        ];
+        if ($report->location_name) {
+            $lines[] = 'Lokasi: '.$report->location_name;
+        }
+        $lines[] = 'Pelapor: '.($report->reporter_name ?: ($report->user->name ?? '-'));
+        $lines[] = '';
+        $lines[] = ($note !== null ? 'Alasan pelapor:' : 'Keterangan:');
+        $lines[] = $desc;
+        $lines[] = '';
+        $lines[] = 'Tangani di HaloDek:';
+        $lines[] = route('admin.reports.show', $report);
+
+        return implode("\n", $lines);
+    }
+
+    /** Kirim teks bebas ke nomor manajer (WA_TO). Dipakai ringkasan harian & pesan uji. Langsung, tidak ditunda. */
+    public function sendToManagers(string $message): int
+    {
+        $cfg = config('services.whatsapp');
+        if (! $this->enabled($cfg)) {
+            return 0;
+        }
+
+        $sent = 0;
+        foreach ($this->managerNumbers($cfg) as $to) {
+            try {
+                $this->send($cfg, $to, $message);
+                $sent++;
+            } catch (Throwable $e) {
+                Log::warning('WhatsApp ke manajer gagal: '.$e->getMessage());
+            }
+        }
+
+        return $sent;
+    }
+
+    /** @return array<int, string> */
+    public function managerNumbers(?array $cfg = null): array
+    {
+        $cfg ??= config('services.whatsapp');
+
+        return array_values(array_unique(array_filter(array_map(
+            fn ($n) => \App\Support\Phone::normalize($n) ?? trim($n),
+            explode(',', (string) ($cfg['to'] ?? ''))
+        ))));
+    }
+
+    /** @return array<int, string> */
+    private function headPriorities(array $cfg): array
+    {
+        return $cfg['head_priorities'] ?? ['tinggi', 'mendesak'];
     }
 
     /** Kabar status ke pelapor. Hanya untuk status diproses/selesai/ditolak dan bila pelapor mengisi nomor WA. */
@@ -33,13 +149,15 @@ class WhatsAppNotifier
             return;
         }
 
-        $report->loadMissing(['user', 'team', 'assignee']);
-        $to = $report->user?->waNumber();
-        if (! $to) {
-            return;
+        try {
+            $report->loadMissing(['user', 'team', 'assignee']);
+            $to = $report->user?->waNumber();
+            if ($to) {
+                $this->queue([$to], $this->reporterMessage($report));
+            }
+        } catch (Throwable $e) {
+            Log::warning('Notifikasi WhatsApp ke pelapor gagal disiapkan: '.$e->getMessage());
         }
-
-        $this->queue([$to], $this->reporterMessage($report));
     }
 
     /**
@@ -154,7 +272,14 @@ class WhatsAppNotifier
     {
         $cfg = config('services.whatsapp');
 
-        dispatch(function () use ($cfg, $targets, $message) {
+        // Callback "terminating" bisa terpanggil lagi bila aplikasi melayani >1 request (tes/Octane):
+        // tanda $done mencegah pesan yang sama terkirim ulang.
+        $done = false;
+        app()->terminating(function () use ($cfg, $targets, $message, &$done) {
+            if ($done) {
+                return;
+            }
+            $done = true;
             foreach ($targets as $to) {
                 try {
                     $this->send($cfg, $to, $message);
@@ -162,7 +287,7 @@ class WhatsAppNotifier
                     Log::warning('Notifikasi WhatsApp gagal: '.$e->getMessage());
                 }
             }
-        })->afterResponse();
+        });
     }
 
     public function message(Report $report): string

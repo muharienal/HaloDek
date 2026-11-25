@@ -92,6 +92,10 @@ class TeamController extends Controller
             $data['code'] = $team->code; // kode tiket regu bawaan tetap
         }
 
+        if ($team->is_active && empty($data['is_active']) && ($open = $team->reports()->whereIn('status', Report::OPEN_STATUSES)->count()) > 0) {
+            return back()->withInput()->with('error', "Regu {$team->name} masih punya {$open} laporan aktif. Selesaikan atau alihkan dulu sebelum menonaktifkan regu.");
+        }
+
         $team->update($data);
         Audit::log('team.update', "Mengubah regu {$team->name}.", $team);
 
@@ -130,6 +134,12 @@ class TeamController extends Controller
 
         if ($data['role'] === User::ROLE_KEPALA_REGU && ($current = $this->currentHead($team)) && $current->id !== $user->id) {
             return back()->with('error', "Regu {$team->name} sudah dipimpin {$current->name}. Gunakan \"Jadikan Kepala Regu\" pada anggota yang ada untuk mengganti kepala.");
+        }
+
+        // Pindah dari regu lain: laporan aktif di regu lamanya harus dialihkan dulu.
+        if ($user->team_id && (int) $user->team_id !== (int) $team->id
+            && ($open = $user->assignedReports()->whereIn('status', Report::OPEN_STATUSES)->count()) > 0) {
+            return back()->with('error', "{$user->name} masih memegang {$open} laporan aktif di regu lamanya. Tugaskan ulang atau lepas laporannya dulu.");
         }
 
         $temp = null;
