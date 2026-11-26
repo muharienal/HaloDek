@@ -13,13 +13,17 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        // Satu instance per request: penugasan massal ke orang yang sama digabung jadi satu pesan WA.
+        $this->app->singleton(\App\Services\WhatsAppNotifier::class);
     }
 
     public function boot(): void
     {
         Carbon::setLocale('id');
         setlocale(LC_TIME, 'id_ID.UTF-8', 'id_ID', 'Indonesian');
+
+        \App\Support\Roles::boot();
+        \App\Support\WhatsAppSettings::apply();
 
         Paginator::defaultView('pagination.halodek');
         Paginator::defaultSimpleView('pagination.halodek');
@@ -33,13 +37,21 @@ class AppServiceProvider extends ServiceProvider
 
             $view->with('unreadCount', UserNotification::where('user_id', $user->id)->where('is_read', false)->count());
             $view->with('recentNotifications', UserNotification::where('user_id', $user->id)->latest()->take(5)->get());
-            // Pengingat nomor WhatsApp: karyawan tanpa nomor melihatnya sekali tiap login.
-            $needsWa = $user->isKaryawan() && ! $user->waNumber();
+            // Pengingat nomor WhatsApp: karyawan tanpa nomor melihatnya sekali tiap login, hanya bila
+            // WhatsApp menyala dan ada kabar yang memang dikirim untuk perannya.
+            $needsWa = $user->isKaryawan() && ! $user->waNumber() && \App\Support\WaRules::active()
+                && \App\Support\WaRules::personalChoices((string) $user->role) !== [];
             $showWaPrompt = $needsWa && ! session()->has('wa_prompt_seen');
             if ($showWaPrompt) {
                 session()->put('wa_prompt_seen', true);
             }
             $view->with('showWaPrompt', $showWaPrompt);
+            // Ajakan pasang aplikasi (PWA): sekali tiap login; browser sendiri yang memastikan belum terpasang.
+            $showPwaPrompt = ! session()->has('pwa_prompt_seen') && ! $user->must_change_password;
+            if ($showPwaPrompt) {
+                session()->put('pwa_prompt_seen', true);
+            }
+            $view->with('showPwaPrompt', $showPwaPrompt);
             $view->with('needsWa', $needsWa);
 
             $view->with('pendingCount', $user->isAdmin()

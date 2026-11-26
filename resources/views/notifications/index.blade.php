@@ -7,7 +7,7 @@
         <div class="card-head">
             <h2>Semua Notifikasi</h2>
             <form method="POST" action="{{ route('notifications.read-all') }}">@csrf @method('PATCH')
-                <button class="btn btn-secondary btn-sm"><x-icon name="check-circle" :size="16" /> Tandai semua dibaca</button></form>
+                <button class="btn btn-secondary btn-sm"><x-icon name="check-circle" :size="16" /> Tandai Semua Dibaca</button></form>
         </div>
         @forelse ($notifications as $n)
             <div class="flex items-start gap-3" style="padding:14px 20px;border-bottom:1px solid var(--line-soft);{{ $n->is_read ? '' : 'background:#EFF6FF' }}">

@@ -18,7 +18,7 @@ class Team extends Model
     public const SLUG_KEAMANAN = 'keamanan';
 
     protected $fillable = [
-        'name', 'slug', 'code', 'description', 'icon', 'color',
+        'name', 'slug', 'code', 'description', 'department_id', 'icon', 'color',
         'is_active', 'is_system', 'sort_order', 'note_templates',
     ];
 
@@ -27,6 +27,12 @@ class Team extends Model
         'is_system' => 'boolean',
         'note_templates' => 'array',
     ];
+
+    /** Bidang tempat regu ini berada (mis. Regu IT di Bidang Umum & IT). */
+    public function department(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Department::class);
+    }
 
     /**
      * Template catatan cepat regu ini; bila belum diatur, pakai bawaan dari config.

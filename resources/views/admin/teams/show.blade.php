@@ -1,15 +1,18 @@
 @extends('layouts.app')
-@section('title', $team->name)
-@section('subtitle', $team->description ?: 'Pengaturan regu')
+@section('title', 'Regu '.$team->name)
+
 
 @section('content')
 @php $isSuper = auth()->user()->isSuperadmin(); $canLead = auth()->user()->leadsTeam($team->id); @endphp
 <div class="flex items-center justify-between wrap gap-3 mb-4">
-    <a href="{{ route('admin.teams.index') }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Semua regu</a>
+    <div class="flex items-center gap-3 wrap">
+        <a href="{{ route('admin.teams.index') }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Semua Regu</a>
+        <span class="text-sm muted">{{ collect(['Kode laporan '.$team->code, $team->department ? 'Bidang '.$team->department->name : null])->filter()->implode(' · ') }}@unless ($team->is_active) · <span class="txt-red bold">Nonaktif</span>@endunless</span>
+    </div>
     @if ($isSuper)
         <div class="flex gap-2">
             <button class="btn btn-secondary btn-sm" data-modal-open="team-modal" data-title="Ubah Regu" data-action="{{ route('admin.teams.update', $team) }}"
-                    data-fill="{{ json_encode(['name' => $team->name, 'code' => $team->code, 'description' => $team->description, 'icon' => $team->icon, 'color' => $team->color, 'is_active' => $team->is_active]) }}"><x-icon name="edit" :size="16" /> Ubah Regu</button>
+                    data-fill="{{ json_encode(['name' => $team->name, 'code' => $team->code, 'description' => $team->description, 'department_id' => $team->department_id, 'icon' => $team->icon, 'color' => $team->color, 'is_active' => $team->is_active]) }}"><x-icon name="edit" :size="16" /> Ubah Regu</button>
             @unless ($team->is_system)
                 <form method="POST" action="{{ route('admin.teams.destroy', $team) }}" data-confirm="Hapus regu {{ $team->name }}? Kategorinya ikut terhapus. Regu yang sudah memiliki laporan tidak dapat dihapus." data-confirm-title="Hapus regu">
                     @csrf @method('DELETE')<button class="btn btn-soft-danger btn-sm"><x-icon name="trash" :size="16" /> Hapus</button></form>
@@ -18,18 +21,19 @@
     @endif
 </div>
 
+{{-- Angka bisa diklik: membuka daftar laporan regu ini dengan saringan yang sesuai. --}}
 <div class="grid cols-4">
-    <div class="card stat"><span class="lbl">Laporan aktif</span><span class="num">{{ $stats['open'] }}</span></div>
-    <div class="card stat"><span class="lbl">Total laporan</span><span class="num">{{ $stats['total'] }}</span></div>
-    <div class="card stat"><span class="lbl">Menunggu diambil</span><span class="num">{{ $stats['unassigned'] }}</span></div>
-    <div class="card stat"><span class="lbl">Rata-rata penyelesaian</span><span class="num">{{ $stats['avg_hours'] !== null ? $stats['avg_hours'] : '–' }}<span class="text-sm muted"> jam kerja</span></span></div>
+    <a class="card stat stat-link" href="{{ route('admin.reports.index', ['team_id' => $team->id, 'status' => 'aktif']) }}"><span class="lbl">Laporan aktif</span><span class="num">{{ $stats['open'] }}</span><x-icon name="arrow-right" :size="16" class="stat-go" /></a>
+    <a class="card stat stat-link" href="{{ route('admin.reports.index', ['team_id' => $team->id]) }}"><span class="lbl">Total laporan</span><span class="num">{{ $stats['total'] }}</span><x-icon name="arrow-right" :size="16" class="stat-go" /></a>
+    <a class="card stat stat-link" href="{{ route('admin.reports.index', ['team_id' => $team->id, 'status' => 'aktif', 'assigned' => 'none']) }}"><span class="lbl">Menunggu diambil</span><span class="num">{{ $stats['unassigned'] }}</span><x-icon name="arrow-right" :size="16" class="stat-go" /></a>
+    <div class="card stat"><span class="lbl">Rata-rata penyelesaian</span><span class="num">{{ \App\Support\Num::dec($stats['avg_hours']) }}@if ($stats['avg_hours'] !== null)<span class="text-sm muted"> jam kerja</span>@endif</span></div>
 </div>
 
 <div class="grid cols-main mt-5" style="align-items:start">
     {{-- ===== KATEGORI ===== --}}
     <div class="card">
         <div class="card-head"><h2>Kategori Layanan</h2>
-            @if ($canLead)<button class="btn btn-primary btn-sm" data-modal-open="category-modal"><x-icon name="plus" :size="16" /> Tambah Kategori</button>@endif</div>
+            @if ($canLead)<button class="btn btn-secondary btn-sm" data-modal-open="category-modal"><x-icon name="plus" :size="16" /> Tambah Kategori</button>@endif</div>
         <div class="table-wrap">
             <table class="table">
                 <thead><tr><th>Kategori</th><th>Laporan</th><th></th></tr></thead>
@@ -58,7 +62,7 @@
     {{-- ===== ANGGOTA ===== --}}
     <div class="card">
         <div class="card-head"><h2>Kepala Regu &amp; Staf</h2>
-            @if ($isSuper)<button class="btn btn-secondary btn-sm" data-modal-open="member-modal"><x-icon name="plus" :size="16" /> Tambah</button>@endif</div>
+            @if ($isSuper)<button class="btn btn-secondary btn-sm" data-modal-open="member-modal"><x-icon name="plus" :size="16" /> Tambah Anggota</button>@endif</div>
         <div class="card-body" style="display:grid;gap:12px">
             @forelse ($members as $u)
                 <div class="flex items-center gap-3">
@@ -71,7 +75,7 @@
                                 @csrf @method('PATCH')<button class="btn btn-secondary btn-sm">Jadikan Kepala</button></form>
                         @endunless
                         <form method="POST" action="{{ route('admin.teams.members.remove', [$team, $u]) }}" data-confirm="Keluarkan {{ $u->name }} dari regu {{ $team->name }}? Perannya kembali menjadi Karyawan." data-confirm-title="Keluarkan anggota" data-confirm-ok="Keluarkan">
-                            @csrf @method('DELETE')<button class="btn btn-ghost btn-icon btn-sm" aria-label="Keluarkan"><x-icon name="x" :size="15" /></button></form>
+                            @csrf @method('DELETE')<button class="btn btn-soft-danger btn-icon btn-sm" aria-label="Keluarkan {{ $u->name }} dari regu" title="Keluarkan dari regu"><x-icon name="logout" :size="15" /></button></form>
                     @endif
                 </div>
             @empty
@@ -125,8 +129,8 @@
                     <div class="modal-head"><h3>Tambah Anggota ke {{ $team->name }}</h3><button type="button" class="btn btn-ghost btn-icon" data-modal-close aria-label="Tutup"><x-icon name="x" :size="18" /></button></div>
                     <div class="modal-body" style="display:grid;gap:16px">
                         <x-select name="user_id" label="Pengguna" required>
-                            <option value="">— Pilih pengguna —</option>
-                            @foreach ($candidates as $c)<option value="{{ $c->id }}">{{ $c->name }} — NIK {{ $c->nik }} ({{ config('halodek.roles.'.$c->role) }})</option>@endforeach
+                            <option value="">- Pilih pengguna -</option>
+                            @foreach ($candidates as $c)<option value="{{ $c->id }}">{{ $c->name }} - NIK {{ $c->nik }} ({{ config('halodek.roles.'.$c->role) }})</option>@endforeach
                         </x-select>
                         <x-select name="role" label="Sebagai" required>
                             <option value="staf">Staf</option>

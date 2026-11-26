@@ -33,20 +33,20 @@ return [
 
     /*
      * Notifikasi WhatsApp laporan baru untuk manager.
-     * driver: off | log | fonnte | wablas. Nomor tujuan dipisah koma (format 628xxxx).
+     * driver: off | log | fonnte. Penerima = No. WhatsApp di profil pengguna, sesuai aturan per peran.
+     * Biasanya diatur Superadmin di menu Administrasi > WhatsApp (tersimpan di database, mengalahkan .env).
      */
     'whatsapp' => [
         'driver' => env('WA_DRIVER', 'off'),
-        'to' => env('WA_TO', ''),
         'token' => env('WA_TOKEN', ''),
-        'secret' => env('WA_SECRET', ''), // khusus Wablas bila akun memakai secret key
-        'wablas_url' => env('WABLAS_URL', 'https://pati.wablas.com'), // server sesuai akun Wablas Anda
-        'timeout' => 8,
-        // Manajer (WA_TO): "harian" = satu ringkasan per hari kerja; "setiap" = tiap laporan baru; "off" = tidak dikirimi.
+        'timeout' => 5,
+        // Hanya dasar aturan bawaan Manajer selama aturan per peran belum disimpan di Administrasi > WhatsApp.
         'manager_mode' => env('WA_MANAJER', 'harian'),
         'digest_at' => env('WA_RINGKASAN_JAM', '16:00'),
-        // Laporan baru dengan prioritas ini langsung dikirim ke WA Kepala Regu regu tujuannya.
+        // "Prioritas penting" untuk aturan Laporan baru masuk (mis. Kepala Regu hanya prioritas penting).
         'head_priorities' => array_values(array_filter(array_map('trim', explode(',', (string) env('WA_KEPALA_PRIORITAS', 'tinggi,mendesak'))))),
+        // Aturan kabar per peran (App\Support\WaRules); null = bawaan.
+        'rules' => null,
     ],
 
     /*

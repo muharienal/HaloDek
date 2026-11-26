@@ -149,7 +149,7 @@ class MonthlyReport
     public function sheets(array $d): array
     {
         $h = fn (string $t) => ['v' => $t, 's' => 'head'];
-        $dec = fn ($v) => $v === null ? '–' : ['v' => (float) $v, 's' => 'dec'];
+        $dec = fn ($v) => $v === null ? '-' : ['v' => (float) $v, 's' => 'dec'];
 
         $summary = [
             [['v' => 'Laporan Bulanan '.config('halodek.name'), 's' => 'title']],
@@ -169,8 +169,8 @@ class MonthlyReport
             ['  dihitung dari laporan yang sudah selesai', $d['resolved_n']],
             ['Rata-rata respons pertama (jam kerja)', $dec($d['avg_respond'])],
             ['  dihitung dari laporan yang sudah ditangani', $d['responded_n']],
-            ['Diambil tepat waktu (%)', $d['on_time_pct'] ?? '–'],
-            ['Kepuasan pelapor: sudah beres (%)', $d['happy_pct'] ?? '–'],
+            ['Diambil tepat waktu (%)', $d['on_time_pct'] ?? '-'],
+            ['Kepuasan pelapor: sudah beres (%)', $d['happy_pct'] ?? '-'],
             ['  pelapor yang menjawab', $d['answered']],
             ['Laporan dibuka ulang pelapor', $d['reopened']],
             ['Total laporan bulan sebelumnya', $d['prev_total']],
@@ -185,8 +185,8 @@ class MonthlyReport
         foreach ($d['teams'] as $t) {
             $top = $t['top'][0] ?? null;
             $perTeam[] = [$t['team']->name, $t['total'], $t['aktif'], $t['selesai'], $t['gagal'], $dec($t['avg_resolve']), $dec($t['avg_respond']),
-                $t['on_time_pct'] ?? '–', $t['happy_pct'] ?? '–', $t['reopened'],
-                $top ? $top['name'].' ('.$top['count'].')' : '–'];
+                $t['on_time_pct'] ?? '-', $t['happy_pct'] ?? '-', $t['reopened'],
+                $top ? $top['name'].' ('.$top['count'].')' : '-'];
             foreach ($t['categories'] as $c) {
                 $cats[] = [$t['team']->name, $c['name'], $c['count'], $t['total'] ? (int) round($c['count'] / $t['total'] * 100) : 0];
             }

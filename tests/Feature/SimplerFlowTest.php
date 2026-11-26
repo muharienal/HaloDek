@@ -145,7 +145,7 @@ class SimplerFlowTest extends TestCase
         $loc = (object) ['id' => 1];
         $cat = Category::where('team_id', Team::where('slug', 'it')->value('id'))->where('name', 'Internet & WiFi')->first();
         $r = $this->submit(['title' => '', 'category_id' => $cat->id, 'location_id' => $loc->id]);
-        $this->assertSame('Internet & WiFi – Ruang Rapat A', $r->title);
+        $this->assertSame('Internet & WiFi - Ruang Rapat A', $r->title);
 
         $lain = Category::where('team_id', $cat->team_id)->where('allow_custom', true)->first();
         $r = $this->submit(['title' => '', 'category_id' => $lain->id, 'custom_category' => 'Proyektor rusak']);

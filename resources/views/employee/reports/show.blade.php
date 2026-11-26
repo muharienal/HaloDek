@@ -6,7 +6,7 @@
 @php $me = auth()->user(); @endphp
 <div class="detail-head mb-4">
     <div class="detail-nav">
-        <a href="{{ route('employee.reports.index') }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Kembali</a>
+        <a href="{{ route('employee.reports.index') }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Laporan Saya</a>
     </div>
     <div class="detail-panel"><x-report-meta :report="$report" /></div>
 </div>
@@ -37,20 +37,22 @@
                             <p class="text-sm muted" style="margin:4px 0 0">Jika belum, laporan dibuka kembali dan diteruskan ke {{ $report->assignee->name ?? 'regu '.$report->team->name }}.</p></div>
                         <div class="confirm-actions">
                             <form method="POST" action="{{ route('employee.reports.confirm', $report) }}">@csrf @method('PATCH')
-                                <button class="btn btn-success btn-block">👍 Sudah beres</button></form>
-                            @can('reopen', $report)<button type="button" class="btn btn-secondary btn-block" data-modal-open="reopen-modal">👎 Belum beres</button>@endcan
+                                <button class="btn btn-success btn-block">👍 Sudah Beres</button></form>
+                            @can('reopen', $report)<button type="button" class="btn btn-secondary btn-block" data-modal-open="reopen-modal">👎 Belum Beres</button>@endcan
                         </div>
                     </div>
                 @elseif ($report->satisfied && auth()->user()->can('reopen', $report))
                     <div class="card-foot text-sm muted">Anda menandai laporan ini sudah beres. Masalahnya muncul lagi? <button type="button" class="link-btn strong" data-modal-open="reopen-modal">Buka kembali</button></div>
                 @endcan
                 {{-- Ditolak: pelapor boleh banding sekali, ditinjau ulang Kepala Regu. --}}
-                @if ($report->status === 'ditolak')
+                @if ($report->status === 'ditolak' && $report->duplicate_of_id && $report->duplicateOf)
+                    <div class="card-foot text-sm">Masalah yang sama sudah dilaporkan di <a class="strong" href="{{ $report->duplicateOf->user_id === auth()->id() ? route('employee.reports.show', $report->duplicateOf) : $report->duplicateOf->publicUrl() }}">{{ $report->duplicateOf->report_number }}</a> dan sedang ditangani. Pantau perkembangannya di sana.</div>
+                @elseif ($report->status === 'ditolak')
                     @can('appeal', $report)
                         <div class="card-foot" style="display:grid;gap:10px">
                             <div><p class="strong" style="margin:0">Tidak setuju dengan penolakan ini?</p>
                                 <p class="text-sm muted" style="margin:4px 0 0">Ajukan banding sekali. Kepala Regu {{ $report->team->name }} akan meninjau ulang laporan Anda.</p></div>
-                            <div><button type="button" class="btn btn-secondary" data-modal-open="appeal-modal">Ajukan banding</button></div>
+                            <div><button type="button" class="btn btn-secondary" data-modal-open="appeal-modal">Ajukan Banding</button></div>
                         </div>
                     @elseif ($report->appealed_at)
                         <div class="card-foot text-sm muted">Banding sudah diajukan {{ $report->appealed_at->translatedFormat('d M Y') }} dan laporan ditolak kembali setelah ditinjau. Keputusan ini final.</div>

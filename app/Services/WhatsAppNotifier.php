@@ -3,24 +3,28 @@
 namespace App\Services;
 
 use App\Models\Report;
+use App\Models\User;
+use App\Support\Phone;
+use App\Support\WaRules;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Notifikasi WhatsApp satu arah:
- *  - ke manajer (WA_TO) saat ada laporan BARU masuk (semua regu);
- *  - ke pelapor (nomor yang ia isi sendiri) saat laporannya diproses, selesai, atau ditolak.
- * Gagal kirim tidak pernah mengganggu pembuatan laporan; dikirim setelah respons selesai.
+ * Notifikasi WhatsApp satu arah lewat Fonnte. Siapa menerima apa diatur per peran di
+ * Administrasi > WhatsApp (WaRules) dan bisa dimatikan sendiri oleh tiap pengguna di Profil.
+ * Nomor diambil dari kolom No. WhatsApp di profil.
+ * Gagal kirim tidak pernah mengganggu proses laporan; pesan dikirim setelah respons selesai.
  */
 class WhatsAppNotifier
 {
     /**
-     * Laporan baru:
-     *  - prioritas tinggi/mendesak (WA_KEPALA_PRIORITAS) -> Kepala Regu regu tujuan (cadangan: WA_TO);
-     *  - manajer (WA_TO) hanya bila WA_MANAJER=setiap; bawaannya ringkasan harian (DailyDigest).
+     * Laporan baru (atau dialihkan) ke sebuah regu.
+     * Laporan berprioritas penting yang tidak punya penerima sama sekali dikirim ke Manajer
+     * (atau Superadmin) agar tidak terlewat.
      */
-    public function newReport(Report $report): void
+    public function newReport(Report $report, ?string $headline = null, array $exclude = []): void
     {
         $cfg = config('services.whatsapp');
         if (! $this->enabled($cfg)) {
@@ -28,29 +32,104 @@ class WhatsAppNotifier
         }
 
         try {
-            $sent = [];
-            if (in_array($report->priority, $this->headPriorities($cfg), true)) {
-                $sent = $this->headAlert($report, 'LAPORAN '.mb_strtoupper($report->priorityLabel()).' MASUK');
-            }
+            $report->loadMissing(['team', 'user', 'category']);
+            $important = in_array($report->priority, WaRules::importantPriorities(), true);
+            $headline ??= $important ? 'LAPORAN '.mb_strtoupper($report->priorityLabel()).' MASUK' : 'LAPORAN BARU MASUK';
 
-            if (($cfg['manager_mode'] ?? 'harian') === 'setiap') {
-                $targets = array_values(array_diff($this->managerNumbers($cfg), $sent));
-                if ($targets) {
-                    $this->queue($targets, $this->message($report));
-                }
+            $exclude = array_merge($exclude, [$report->user_id]);
+            $users = $this->numbersOf($this->usersFor('baru', $report->team_id, $report->priority, $exclude));
+            if (! $users && $important) {
+                $users = $this->fallbackNumbers('baru', $exclude);
+            }
+            if ($users) {
+                $this->queue($users, $this->headMessage($report, $headline));
             }
         } catch (Throwable $e) {
             Log::warning('Notifikasi WhatsApp laporan baru gagal disiapkan: '.$e->getMessage());
         }
     }
 
+    /** Laporan dialihkan ke regu lain: penerima "Laporan baru" di regu tujuan diberi tahu. */
+    public function transferred(Report $report, User $actor): void
+    {
+        $report->loadMissing('team');
+        $this->newReport($report, 'LAPORAN DIALIHKAN KE REGU '.mb_strtoupper((string) ($report->team->name ?? '')), [$actor->id]);
+    }
+
+    /** @var array<string, array{actor: string, reports: array<int, Report>}> penugasan dalam request ini, per nomor */
+    private array $assignments = [];
+
     /**
-     * Pesan penting untuk Kepala Regu regu laporan (nomor dari profilnya). Bila belum ada Kepala Regu
-     * dengan nomor WA, dikirim ke WA_TO agar tidak hilang. Mengembalikan nomor tujuan.
-     *
-     * @return array<int, string>
+     * Penanggung jawab baru ditunjuk orang lain. Penugasan massal ke orang yang sama
+     * digabung menjadi satu pesan (dikirim setelah respons selesai).
      */
-    public function headAlert(Report $report, string $headline, ?string $note = null): array
+    public function assigned(Report $report, User $assignee, User $actor): void
+    {
+        if (! $this->enabled(config('services.whatsapp')) || $assignee->id === $actor->id) {
+            return;
+        }
+
+        try {
+            $to = $assignee->wantsWa('tugas') ? $assignee->waNumber() : null;
+            if (! $to) {
+                return;
+            }
+            $first = $this->assignments === [];
+            $this->assignments[$to]['actor'] = $actor->name;
+            $this->assignments[$to]['reports'][$report->id] = $report;
+            if ($first) {
+                $cfg = config('services.whatsapp');
+                $done = false;
+                app()->terminating(function () use ($cfg, &$done) {
+                    if ($done) {
+                        return;
+                    }
+                    $done = true;
+                    $batch = $this->assignments;
+                    $this->assignments = [];
+                    foreach ($batch as $number => $item) {
+                        try {
+                            $this->send($cfg, $number, $this->assignedMessage(array_values($item['reports']), $item['actor']));
+                        } catch (Throwable $e) {
+                            Log::warning('Notifikasi WhatsApp penugasan gagal: '.$e->getMessage());
+                        }
+                    }
+                });
+            }
+        } catch (Throwable $e) {
+            Log::warning('Notifikasi WhatsApp penugasan gagal disiapkan: '.$e->getMessage());
+        }
+    }
+
+    /** @param array<int, Report> $reports */
+    public function assignedMessage(array $reports, string $actorName): string
+    {
+        if (count($reports) === 1) {
+            return $this->headMessage($reports[0], 'TUGAS BARU UNTUK ANDA', null, 'Ditugaskan oleh '.$actorName.'.');
+        }
+
+        $lines = ['*'.count($reports).' TUGAS BARU UNTUK ANDA*', '', 'Ditugaskan oleh '.$actorName.':'];
+        foreach (array_slice($reports, 0, 10) as $i => $r) {
+            $lines[] = '';
+            $lines[] = ($i + 1).'. '.$r->report_number.' · '.$r->priorityLabel();
+            $lines[] = '   '.\Illuminate\Support\Str::limit($r->title, 80);
+            $lines[] = '   '.route('admin.reports.show', $r);
+        }
+        if (count($reports) > 10) {
+            $lines[] = '';
+            $lines[] = '…dan '.(count($reports) - 10).' tugas lain.';
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Banding atau "belum beres" dari pelapor. Penerima: aturan "Banding & dibuka lagi"
+     * (Staf hanya bila ia penanggung jawabnya). Tanpa penerima -> Manajer/Superadmin.
+     *
+     * @return array<int, string> nomor tujuan
+     */
+    public function objection(Report $report, string $headline, ?string $note = null): array
     {
         $cfg = config('services.whatsapp');
         if (! $this->enabled($cfg)) {
@@ -58,11 +137,11 @@ class WhatsAppNotifier
         }
 
         try {
-            $report->loadMissing(['team', 'user', 'category']);
-            $targets = \App\Models\User::active()->where('team_id', $report->team_id)->where('role', \App\Models\User::ROLE_KEPALA_REGU)
-                ->get()->map->waNumber()->filter()->unique()->values()->all();
+            $users = $this->usersFor('keberatan', $report->team_id, null, [$report->user_id])
+                ->reject(fn (User $u) => $u->role === User::ROLE_STAF && $u->id !== $report->assigned_to_id);
+            $targets = $this->numbersOf($users);
             if (! $targets) {
-                $targets = $this->managerNumbers($cfg);
+                $targets = $this->fallbackNumbers('keberatan', [$report->user_id]);
             }
             if ($targets) {
                 $this->queue($targets, $this->headMessage($report, $headline, $note));
@@ -70,13 +149,63 @@ class WhatsAppNotifier
 
             return $targets;
         } catch (Throwable $e) {
-            Log::warning('Notifikasi WhatsApp Kepala Regu gagal disiapkan: '.$e->getMessage());
+            Log::warning('Notifikasi WhatsApp banding gagal disiapkan: '.$e->getMessage());
 
             return [];
         }
     }
 
-    public function headMessage(Report $report, string $headline, ?string $note = null): string
+    /** Balasan (bukan catatan internal) pada laporan: ke pelapor, atau ke petugas bila pelapor yang membalas. */
+    public function reply(Report $report, User $actor, string $text): void
+    {
+        if (! $this->enabled(config('services.whatsapp'))) {
+            return;
+        }
+
+        try {
+            $report->loadMissing(['user', 'team', 'assignee']);
+            $short = trim(preg_replace('/\s+/', ' ', $text));
+            $short = mb_strlen($short) > 200 ? mb_substr($short, 0, 200).'…' : $short;
+
+            if ($actor->isAdmin()) {
+                $reporter = $report->user;
+                if ($reporter && $reporter->id !== $actor->id && $reporter->wantsWa('balasan') && ($to = $reporter->waNumber())) {
+                    $this->queue([$to], $this->replyMessage($report, $actor, $short, $report->publicUrl()));
+                }
+
+                return;
+            }
+
+            $users = $report->assigned_to_id
+                ? collect([$report->assignee])->filter(fn ($u) => $u && $u->wantsWa('balasan'))
+                : $this->usersFor('balasan', $report->team_id, null, [$actor->id])
+                    ->filter(fn (User $u) => in_array($u->role, [User::ROLE_KEPALA_REGU, User::ROLE_STAF], true) && (int) $u->team_id === (int) $report->team_id);
+            $targets = array_values(array_diff($this->numbersOf($users->reject(fn ($u) => $u->id === $actor->id)), [$actor->waNumber()]));
+            if ($targets) {
+                $this->queue($targets, $this->replyMessage($report, $actor, $short, route('admin.reports.show', $report)));
+            }
+        } catch (Throwable $e) {
+            Log::warning('Notifikasi WhatsApp balasan gagal disiapkan: '.$e->getMessage());
+        }
+    }
+
+    public function replyMessage(Report $report, User $actor, string $text, string $url): string
+    {
+        return implode("\n", [
+            '*BALASAN BARU*',
+            '',
+            '*'.mb_strtoupper($report->title).'*',
+            'No. laporan: '.$report->report_number,
+            '',
+            $actor->name.':',
+            $text,
+            '',
+            'Buka laporan:',
+            $url,
+        ]);
+    }
+
+    public function headMessage(Report $report, string $headline, ?string $note = null, ?string $extraLine = null): string
     {
         $report->loadMissing(['team', 'user', 'category']);
         $desc = trim(preg_replace('/\s+/', ' ', (string) ($note ?? $report->description)));
@@ -94,6 +223,9 @@ class WhatsAppNotifier
             $lines[] = 'Lokasi: '.$report->location_name;
         }
         $lines[] = 'Pelapor: '.($report->reporter_name ?: ($report->user->name ?? '-'));
+        if ($extraLine) {
+            $lines[] = $extraLine;
+        }
         $lines[] = '';
         $lines[] = ($note !== null ? 'Alasan pelapor:' : 'Keterangan:');
         $lines[] = $desc;
@@ -104,42 +236,85 @@ class WhatsAppNotifier
         return implode("\n", $lines);
     }
 
-    /** Kirim teks bebas ke nomor manajer (WA_TO). Dipakai ringkasan harian & pesan uji. Langsung, tidak ditunda. */
-    public function sendToManagers(string $message): int
+    /** Kirim teks bebas ke nomor-nomor tertentu, langsung (tidak ditunda). Mengembalikan jumlah yang berhasil. */
+    public function sendNow(array $numbers, string $message): int
     {
         $cfg = config('services.whatsapp');
         if (! $this->enabled($cfg)) {
             return 0;
         }
 
+        return $this->deliver($cfg, $numbers, $message);
+    }
+
+    /**
+     * Kirim satu pesan ke banyak nomor sekaligus: Fonnte menerima beberapa nomor dalam satu panggilan
+     * (dipisah koma), jadi 10 penerima = 1 panggilan, bukan 10. Mengembalikan jumlah nomor yang berhasil.
+     */
+    private function deliver(array $cfg, array $numbers, string $message): int
+    {
         $sent = 0;
-        foreach ($this->managerNumbers($cfg) as $to) {
+        foreach (array_chunk(array_values(array_unique(array_filter($numbers))), 50) as $chunk) {
             try {
-                $this->send($cfg, $to, $message);
-                $sent++;
+                $this->send($cfg, implode(',', $chunk), $message);
+                $sent += count($chunk);
             } catch (Throwable $e) {
-                Log::warning('WhatsApp ke manajer gagal: '.$e->getMessage());
+                Log::warning('WhatsApp ke '.implode(', ', $chunk).' gagal: '.$e->getMessage());
             }
         }
 
         return $sent;
     }
 
-    /** @return array<int, string> */
-    public function managerNumbers(?array $cfg = null): array
+    /**
+     * Pengguna aktif ber-No. WhatsApp yang mau menerima kabar ini.
+     * Superadmin & Manajer: semua regu. Kepala Regu & Staf: hanya regunya ($teamId).
+     *
+     * @return Collection<int, User>
+     */
+    public function usersFor(string $event, ?int $teamId, ?string $priority = null, array $exclude = []): Collection
     {
-        $cfg ??= config('services.whatsapp');
+        $roles = WaRules::rolesFor($event, $priority);
+        if (! $roles) {
+            return collect();
+        }
 
-        return array_values(array_unique(array_filter(array_map(
-            fn ($n) => \App\Support\Phone::normalize($n) ?? trim($n),
-            explode(',', (string) ($cfg['to'] ?? ''))
-        ))));
+        return User::active()->whereIn('role', $roles)->whereNotNull('phone')->where('phone', '!=', '')
+            ->whereNotIn('id', array_filter($exclude))
+            ->where(function ($q) use ($teamId) {
+                $q->whereIn('role', [User::ROLE_SUPERADMIN, User::ROLE_MANAJER]);
+                if ($teamId) {
+                    $q->orWhere('team_id', $teamId);
+                }
+            })
+            ->orderBy('id')->get()
+            ->filter(fn (User $u) => $u->wantsWa($event, $priority) && $u->waNumber())
+            ->values();
     }
 
     /** @return array<int, string> */
-    private function headPriorities(array $cfg): array
+    public function numbersOf(Collection $users): array
     {
-        return $cfg['head_priorities'] ?? ['tinggi', 'mendesak'];
+        return $users->map->waNumber()->filter()->unique()->values()->all();
+    }
+
+    /**
+     * Cadangan agar kabar penting tidak hilang bila tak ada penerima: Manajer ber-No. WA,
+     * atau Superadmin bila belum ada Manajer (kecuali yang mematikan kabar ini di profilnya).
+     *
+     * @return array<int, string>
+     */
+    public function fallbackNumbers(string $event, array $exclude = []): array
+    {
+        foreach ([User::ROLE_MANAJER, User::ROLE_SUPERADMIN] as $role) {
+            $users = User::active()->where('role', $role)->whereNotNull('phone')->whereNotIn('id', array_filter($exclude))->orderBy('id')->get()
+                ->reject(fn (User $u) => in_array($event, (array) ($u->wa_off ?? []), true));
+            if ($numbers = $this->numbersOf($users)) {
+                return $numbers;
+            }
+        }
+
+        return [];
     }
 
     /** Kabar status ke pelapor. Hanya untuk status diproses/selesai/ditolak dan bila pelapor mengisi nomor WA. */
@@ -151,7 +326,7 @@ class WhatsAppNotifier
 
         try {
             $report->loadMissing(['user', 'team', 'assignee']);
-            $to = $report->user?->waNumber();
+            $to = $report->user?->wantsWa('laporan_saya') ? $report->user->waNumber() : null;
             if ($to) {
                 $this->queue([$to], $this->reporterMessage($report));
             }
@@ -161,8 +336,8 @@ class WhatsAppNotifier
     }
 
     /**
-     * Pengingat ke Kepala Regu (nomor di profil) untuk laporan yang lewat batas respons.
-     * Bila tak satu pun Kepala Regu punya nomor, dikirim ke WA_TO. Dikirim langsung (dipanggil dari perintah terjadwal).
+     * Pengingat laporan lewat batas respons. Penerima: aturan "Lewat batas respons";
+     * tanpa penerima -> Manajer/Superadmin. Dikirim langsung (dipanggil dari tugas latar).
      *
      * @param  \Illuminate\Support\Collection<int, Report>  $reports
      * @return int jumlah nomor yang berhasil dikirimi
@@ -174,24 +349,12 @@ class WhatsAppNotifier
             return 0;
         }
 
-        $targets = \App\Models\User::active()->where('team_id', $team->id)->where('role', \App\Models\User::ROLE_KEPALA_REGU)
-            ->get()->map->waNumber()->filter()->unique()->values()->all();
+        $targets = $this->numbersOf($this->usersFor('lewat_batas', $team->id));
         if (! $targets) {
-            $targets = array_filter(array_map(fn ($n) => \App\Support\Phone::normalize($n) ?? trim($n), explode(',', (string) $cfg['to'])));
+            $targets = $this->fallbackNumbers('lewat_batas');
         }
 
-        $message = $this->overdueMessage($team, $reports);
-        $sent = 0;
-        foreach (array_unique($targets) as $to) {
-            try {
-                $this->send($cfg, $to, $message);
-                $sent++;
-            } catch (Throwable $e) {
-                Log::warning('Pengingat WhatsApp gagal: '.$e->getMessage());
-            }
-        }
-
-        return $sent;
+        return $this->sendNow($targets, $this->overdueMessage($team, $reports));
     }
 
     /** @param  \Illuminate\Support\Collection<int, Report>  $reports */
@@ -232,7 +395,9 @@ class WhatsAppNotifier
 
         [$head, $intro, $noteLabel] = match ($report->status) {
             'selesai' => ['LAPORAN ANDA SUDAH SELESAI', 'laporan Anda sudah selesai ditangani.', 'Catatan penyelesaian'],
-            'ditolak' => ['LAPORAN ANDA TIDAK DAPAT DIPROSES', 'mohon maaf, laporan Anda tidak dapat dilanjutkan.', 'Alasan'],
+            'ditolak' => $report->duplicate_of_id
+                ? ['LAPORAN ANDA DIGABUNG', 'masalah yang sama sudah dilaporkan dan sedang ditangani.', 'Keterangan']
+                : ['LAPORAN ANDA TIDAK DAPAT DIPROSES', 'mohon maaf, laporan Anda tidak dapat dilanjutkan.', 'Alasan'],
             default => ['LAPORAN ANDA SEDANG DIPROSES', 'laporan Anda sedang ditangani.', 'Catatan penanggung jawab'],
         };
 
@@ -257,14 +422,17 @@ class WhatsAppNotifier
         }
         $lines[] = '';
         $lines[] = 'Pantau status terkini:';
-        $lines[] = $report->publicUrl();
+        $lines[] = ($report->duplicate_of_id && $report->duplicateOf) ? $report->duplicateOf->publicUrl() : $report->publicUrl();
 
         return implode("\n", $lines);
     }
 
     private function enabled(array $cfg): bool
     {
-        return ($cfg['driver'] ?? 'off') !== 'off';
+        $driver = $cfg['driver'] ?? 'off';
+
+        // Fonnte tanpa token pasti gagal: anggap mati agar tidak memenuhi log dengan galat.
+        return $driver === 'log' || ($driver === 'fonnte' && trim((string) ($cfg['token'] ?? '')) !== '');
     }
 
     /** Kirim setelah respons ke browser selesai; gagal kirim hanya dicatat di log. */
@@ -280,62 +448,17 @@ class WhatsAppNotifier
                 return;
             }
             $done = true;
-            foreach ($targets as $to) {
-                try {
-                    $this->send($cfg, $to, $message);
-                } catch (Throwable $e) {
-                    Log::warning('Notifikasi WhatsApp gagal: '.$e->getMessage());
-                }
-            }
+            $this->deliver($cfg, $targets, $message);
         });
-    }
-
-    public function message(Report $report): string
-    {
-        $report->loadMissing(['team', 'user', 'category']);
-
-        $reporter = $report->reporter_name ?: ($report->user->name ?? '-');
-        $meta = array_filter([$report->user->nik ?? null ? 'NIK '.$report->user->nik : null, $report->user->department ?? null]);
-        $desc = trim(preg_replace('/\s+/', ' ', (string) $report->description));
-        $desc = mb_strlen($desc) > 200 ? mb_substr($desc, 0, 200).'…' : $desc;
-
-        $lines = [
-            '*LAPORAN BARU MASUK*',
-            '',
-            '*'.mb_strtoupper($report->title).'*',
-            'No. laporan: '.$report->report_number,
-            'Regu tujuan: Regu '.($report->team->name ?? '-'),
-            'Kategori: '.$report->categoryDisplayName(),
-            'Prioritas: '.$report->priorityLabel(),
-        ];
-        if ($report->location_name) {
-            $lines[] = 'Lokasi: '.$report->location_name;
-        }
-        if ($report->assetLabel()) {
-            $lines[] = 'Barang: '.$report->asset_name.($report->asset_code ? ' ('.$report->asset_code.')' : '');
-        }
-        $lines[] = '';
-        $lines[] = 'Pelapor: '.$reporter.($meta ? ' ('.implode(', ', $meta).')' : '');
-        $lines[] = 'Waktu: '.$report->created_at->translatedFormat('d M Y, H:i').' WIB';
-        $lines[] = '';
-        $lines[] = 'Keterangan:';
-        $lines[] = $desc;
-        $lines[] = '';
-        $lines[] = 'Pantau status terkini:';
-        $lines[] = $report->publicUrl();
-
-        return implode("\n", $lines);
     }
 
     private function send(array $cfg, string $to, string $message): void
     {
         match ($cfg['driver']) {
             'log' => Log::info("[WA ke {$to}]\n{$message}"),
-            'fonnte' => $this->check(Http::timeout($cfg['timeout'])->withHeaders(['Authorization' => $cfg['token']])
+            // Batas tunggu pendek: pengiriman berjalan setelah halaman tampil, tetapi tetap memakai proses yang sama.
+            'fonnte' => $this->check(Http::connectTimeout(3)->timeout($cfg['timeout'] ?? 5)->withHeaders(['Authorization' => $cfg['token']])
                 ->asForm()->post('https://api.fonnte.com/send', ['target' => $to, 'message' => $message, 'countryCode' => '62'])),
-            'wablas' => $this->check(Http::timeout($cfg['timeout'])
-                ->withHeaders(['Authorization' => $cfg['token'].($cfg['secret'] ? '.'.$cfg['secret'] : '')])
-                ->asForm()->post(rtrim($cfg['wablas_url'], '/').'/api/send-message', ['phone' => $to, 'message' => $message])),
             default => null,
         };
     }
@@ -344,6 +467,11 @@ class WhatsAppNotifier
     {
         if (! $response->successful()) {
             throw new \RuntimeException('HTTP '.$response->status());
+        }
+        // Fonnte membalas HTTP 200 dengan status false bila ditolak (token salah, perangkat terputus, kuota habis).
+        $json = $response->json();
+        if (is_array($json) && ($json['status'] ?? null) === false) {
+            throw new \RuntimeException('Ditolak Fonnte: '.mb_substr((string) ($json['reason'] ?? $json['detail'] ?? 'tanpa alasan'), 0, 200));
         }
     }
 }

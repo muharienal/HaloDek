@@ -82,26 +82,27 @@
                 <div class="field" @if (empty($locations)) hidden @endif>
                     <label class="label" for="location_id">Lokasi / ruangan</label>
                     <select class="select" name="location_id" id="location_id">
-                        <option value="">— Tidak spesifik —</option>
+                        <option value="">- Tidak spesifik -</option>
                         @foreach ($locations as $loc)<option value="{{ $loc['id'] }}" @selected(old('location_id', request('lokasi')) == $loc['id'])>{{ $loc['label'] }}</option>@endforeach
                     </select>
                     @error('location_id')<span class="error">{{ $message }}</span>@enderror
                 </div>
                 <div class="field" id="asset-wrap" hidden>
                     <label class="label" for="asset_id">Barang terkait</label>
-                    <select class="select" name="asset_id" id="asset_id"><option value="">— Tidak terkait barang tertentu —</option></select>
+                    <select class="select" name="asset_id" id="asset_id"><option value="">- Tidak terkait barang tertentu -</option></select>
                     @error('asset_id')<span class="error">{{ $message }}</span>@enderror
                 </div>
             </div>
 
+            @if (session('duplicates'))
+                <div class="alert alert-warning" role="alert"><x-icon name="alert" :size="18" />
+                    <div style="flex:1;min-width:0"><strong>Barang ini masih punya laporan aktif.</strong> Bila masalahnya sama, tidak perlu melapor lagi: pantau laporan berikut.
+                        <ul class="similar-list">@foreach (session('duplicates') as $d)<li><a href="{{ $d['url'] }}" target="_blank" rel="noopener">{{ $d['number'] }}</a> · {{ $d['status'] }} · {{ $d['age'] }}</li>@endforeach</ul>
+                        <label class="check mt-2"><input type="checkbox" name="confirm_duplicate" value="1"> Masalah saya berbeda, tetap kirim laporan baru</label>
+                    </div>
+                </div>
+            @endif
             <div class="alert alert-warning similar-box" id="similar" hidden role="status" aria-live="polite"></div>
-
-            <div class="field">
-                <label class="label" for="title">Judul <span class="muted" style="font-weight:400">(opsional)</span></label>
-                <input class="input {{ $errors->has('title') ? 'is-invalid' : '' }}" name="title" id="title" maxlength="200" value="{{ old('title') }}" placeholder="Kosongkan untuk judul otomatis">
-                <span class="hint" id="title-hint">Jika dikosongkan, judul dibuat otomatis dari kategori dan lokasi.</span>
-                @error('title')<span class="error">{{ $message }}</span>@enderror
-            </div>
 
             <x-textarea name="description" label="Deskripsi" required maxlength="3000" rows="6" counter placeholder="Ceritakan masalahnya: apa yang terjadi, di mana, dan sejak kapan." />
 
@@ -145,8 +146,6 @@
     var assetWrap = document.getElementById('asset-wrap');
     var asset = document.getElementById('asset_id');
     var current = {};
-    var title = document.getElementById('title');
-    var titleHint = document.getElementById('title-hint');
     var desc = document.getElementById('description');
     var defaultDesc = desc ? desc.getAttribute('placeholder') : '';
 
@@ -157,7 +156,7 @@
         card.hidden = !id;
         if (!id) { return; }
         var list = map[id] || [];
-        cat.innerHTML = '<option value="">— Pilih kategori —</option>';
+        cat.innerHTML = '<option value="">- Pilih kategori -</option>';
         current = {};
         list.forEach(function (c) {
             current[c.id] = c;
@@ -177,18 +176,6 @@
         customWrap.hidden = !need;
         custom.required = need;
         if (desc) { desc.setAttribute('placeholder', (c && c.hint) ? c.hint : defaultDesc); }
-        autoTitle();
-    }
-
-    // Pratinjau judul otomatis: "Kategori – Lokasi" (sama seperti di server).
-    function autoTitle() {
-        var c = current[cat.value];
-        var name = c ? ((c.custom && custom.value.trim()) ? custom.value.trim() : c.name) : '';
-        var l = loc.options[loc.selectedIndex];
-        var where = loc.value && l ? l.textContent.replace(/\s*\(.*\)\s*$/, '').trim() : '';
-        var auto = name ? name + (where ? ' – ' + where : '') : '';
-        title.setAttribute('placeholder', auto ? auto : 'Kosongkan untuk judul otomatis');
-        titleHint.textContent = auto ? 'Jika dikosongkan, judulnya: “' + auto + '”.' : 'Jika dikosongkan, judul dibuat otomatis dari kategori dan lokasi.';
     }
 
     // ===== Cari jenis masalah (komponen x-category-search): regu + kategori ikut terpilih =====
@@ -198,7 +185,7 @@
         oldCat = e.detail.cat; asset.value = '';
         renderCategories();
         card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        setTimeout(function () { title.focus({ preventScroll: true }); }, 400);
+        setTimeout(function () { (desc || cat).focus({ preventScroll: true }); }, 400);
     });
     function esc(t) { var d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML.replace(/"/g, '&quot;'); }
 
@@ -210,7 +197,7 @@
             .then(function (r) { return r.ok ? r.json() : []; })
             .then(function (items) {
                 var keep = asset.value || oldAsset;
-                asset.innerHTML = '<option value="">— Tidak terkait barang tertentu —</option>';
+                asset.innerHTML = '<option value="">- Tidak terkait barang tertentu -</option>';
                 items.forEach(function (a) {
                     var o = document.createElement('option');
                     o.value = a.id; o.textContent = a.label;
@@ -219,6 +206,7 @@
                 });
                 assetWrap.hidden = items.length === 0;
                 oldAsset = null;
+                checkSimilar(); // barang dari pindai QR sudah terpilih: langsung cek laporan aktifnya
             })
             .catch(function () { assetWrap.hidden = true; });
     }
@@ -230,7 +218,7 @@
         clearTimeout(simTimer);
         simTimer = setTimeout(function () {
             var id = teamId();
-            if (!id || !cat.value || (!loc.value && !asset.value)) { similar.hidden = true; return; }
+            if (!id || (!asset.value && (!cat.value || !loc.value))) { similar.hidden = true; return; }
             var seq = ++simSeq;
             var url = similarUrl + '?team_id=' + encodeURIComponent(id) + '&category_id=' + encodeURIComponent(cat.value)
                 + '&location_id=' + encodeURIComponent(loc.value || '') + '&asset_id=' + encodeURIComponent(asset.value || '');
@@ -255,10 +243,9 @@
     form.addEventListener('change', function (e) {
         if (e.target.name === 'team_id') { oldCat = null; asset.value = ''; renderCategories(); card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
         if (e.target === cat) { toggleCustom(); checkSimilar(); }
-        if (e.target === loc) { asset.value = ''; loadAssets(); autoTitle(); checkSimilar(); }
+        if (e.target === loc) { asset.value = ''; loadAssets(); checkSimilar(); }
         if (e.target === asset) { checkSimilar(); }
     });
-    custom.addEventListener('input', autoTitle);
 
     renderCategories();
 })();

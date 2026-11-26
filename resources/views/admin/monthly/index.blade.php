@@ -27,16 +27,16 @@
                 <span class="hint faint">Bulan lalu: {{ $d['prev_total'] }}</span></div>
             <div class="card stat"><span class="lbl">Tingkat Selesai</span><span class="num">{{ $d['done_pct'] }}%</span>
                 <div class="progress mt-1"><span style="width: {{ $d['done_pct'] }}%"></span></div></div>
-            <div class="card stat"><span class="lbl">Rata-rata Penyelesaian</span><span class="num">{{ $d['avg_resolve'] !== null ? $d['avg_resolve'].' jam' : '–' }}</span>
+            <div class="card stat"><span class="lbl">Rata-rata Penyelesaian</span><span class="num">{{ \App\Support\Num::workHours($d['avg_resolve']) }}</span>
                 <span class="hint faint">dari {{ $d['resolved_n'] }} laporan yang sudah selesai</span></div>
-            <div class="card stat"><span class="lbl">Respons Pertama</span><span class="num">{{ $d['avg_respond'] !== null ? $d['avg_respond'].' jam' : '–' }}</span>
+            <div class="card stat"><span class="lbl">Respons Pertama</span><span class="num">{{ \App\Support\Num::workHours($d['avg_respond']) }}</span>
                 <span class="hint faint">dari {{ $d['responded_n'] }} laporan yang sudah ditangani</span></div>
         </div>
 
         <div class="grid cols-3 mt-4">
-            <div class="card stat"><span class="lbl">Diambil Tepat Waktu</span><span class="num">{{ $d['on_time_pct'] !== null ? $d['on_time_pct'].'%' : '–' }}</span>
+            <div class="card stat"><span class="lbl">Diambil Tepat Waktu</span><span class="num">{{ $d['on_time_pct'] !== null ? $d['on_time_pct'].'%' : '-' }}</span>
                 <span class="hint faint">{{ $d['on_time'] }} dari {{ $d['responded_n'] }} yang sudah ditangani</span></div>
-            <div class="card stat"><span class="lbl">Kepuasan Pelapor</span><span class="num">{{ $d['happy_pct'] !== null ? $d['happy_pct'].'%' : '–' }}</span>
+            <div class="card stat"><span class="lbl">Kepuasan Pelapor</span><span class="num">{{ $d['happy_pct'] !== null ? $d['happy_pct'].'%' : '-' }}</span>
                 <span class="hint faint">{{ $d['happy'] }} dari {{ $d['answered'] }} pelapor menjawab “sudah beres”</span></div>
             <div class="card stat"><span class="lbl">Dibuka Ulang</span><span class="num">{{ $d['reopened'] }}</span>
                 <span class="hint faint">laporan yang ternyata belum beres</span></div>
@@ -67,12 +67,12 @@
                             <td>{{ $t['aktif'] }}</td>
                             <td>{{ $t['selesai'] }}</td>
                             <td>{{ $t['gagal'] }}</td>
-                            <td>{{ $t['avg_resolve'] !== null ? $t['avg_resolve'].' jam kerja' : '–' }}</td>
-                            <td>{{ $t['avg_respond'] !== null ? $t['avg_respond'].' jam kerja' : '–' }}</td>
-                            <td>{{ $t['on_time_pct'] !== null ? $t['on_time_pct'].'%' : '–' }}</td>
-                            <td>{{ $t['happy_pct'] !== null ? $t['happy_pct'].'%' : '–' }}@if ($t['reopened'])<div class="text-xs muted">{{ $t['reopened'] }} dibuka ulang</div>@endif</td>
+                            <td>{{ \App\Support\Num::workHours($t['avg_resolve']) }}</td>
+                            <td>{{ \App\Support\Num::workHours($t['avg_respond']) }}</td>
+                            <td>{{ $t['on_time_pct'] !== null ? $t['on_time_pct'].'%' : '-' }}</td>
+                            <td>{{ $t['happy_pct'] !== null ? $t['happy_pct'].'%' : '-' }}@if ($t['reopened'])<div class="text-xs muted">{{ $t['reopened'] }} dibuka ulang</div>@endif</td>
                             <td>
-                                @forelse ($t['top'] as $c)<div class="text-sm">{{ $c['name'] }} <span class="muted">· {{ $c['count'] }}</span></div>@empty<span class="muted">–</span>@endforelse
+                                @forelse ($t['top'] as $c)<div class="text-sm">{{ $c['name'] }} <span class="muted">· {{ $c['count'] }}</span></div>@empty<span class="muted">-</span>@endforelse
                             </td>
                         </tr>
                     @endforeach

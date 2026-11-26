@@ -39,6 +39,7 @@
                             <a href="{{ route('employee.reports.show', $r) }}">
                                 <span class="rm-top"><span class="mono strong">{{ $r->report_number }}</span><x-badge :tone="$r->statusTone()">{{ $r->statusLabel() }}</x-badge></span>
                                 <span class="rm-title truncate">{{ $r->title }}</span>
+                                <span class="rm-meta truncate">{{ $r->summary(70) }}</span>
                                 <span class="rm-meta">{{ $r->team->name ?? '' }} · {{ $r->created_at->diffForHumans() }}</span>
                             </a>
                         </li>

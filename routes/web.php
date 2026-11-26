@@ -104,6 +104,7 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
             Route::post('/laporan/{report}/tutup', [Admin\ReportController::class, 'close'])->name('reports.close');
             Route::post('/laporan/{report}/ambil', [Admin\ReportController::class, 'take'])->name('reports.take');
             Route::post('/laporan/{report}/lepas', [Admin\ReportController::class, 'release'])->name('reports.release');
+            Route::post('/laporan/{report}/gabung', [Admin\ReportController::class, 'merge'])->name('reports.merge');
             Route::post('/laporan/{report}/pindah', [Admin\ReportController::class, 'transfer'])->name('reports.transfer');
             Route::post('/laporan/{report}/balas', [Admin\ReportController::class, 'comment'])->middleware('throttle:submit')->name('reports.comment');
             Route::post('/regu/{team}/kategori', [Admin\CategoryController::class, 'store'])->name('categories.store');
@@ -128,8 +129,16 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
             Route::patch('/pengguna/{user}/status', [Admin\UserController::class, 'toggle'])->name('users.toggle');
             Route::delete('/pengguna/{user}', [Admin\UserController::class, 'destroy'])->name('users.destroy');
 
+            Route::get('/organisasi', [Admin\OrganizationController::class, 'index'])->name('org.index');
+            Route::put('/organisasi/peran/{role}', [Admin\OrganizationController::class, 'updateRole'])->name('org.role');
+            Route::post('/organisasi/{type}', [Admin\OrganizationController::class, 'store'])->whereIn('type', ['divisi', 'bidang', 'jabatan'])->name('org.store');
+            Route::put('/organisasi/{type}/{id}', [Admin\OrganizationController::class, 'update'])->whereIn('type', ['divisi', 'bidang', 'jabatan'])->whereNumber('id')->name('org.update');
+            Route::delete('/organisasi/{type}/{id}', [Admin\OrganizationController::class, 'destroy'])->whereIn('type', ['divisi', 'bidang', 'jabatan'])->whereNumber('id')->name('org.destroy');
+
             Route::get('/audit', [Admin\AuditLogController::class, 'index'])->name('audit.index');
             Route::get('/status', [Admin\SystemStatusController::class, 'index'])->name('status.index');
+            Route::get('/whatsapp', [Admin\WhatsAppSettingsController::class, 'edit'])->name('wa.edit');
+            Route::put('/whatsapp', [Admin\WhatsAppSettingsController::class, 'update'])->name('wa.update');
             Route::post('/status/uji-wa', [Admin\SystemStatusController::class, 'testWhatsApp'])->middleware('throttle:6,1')->name('status.wa-test');
         });
     });

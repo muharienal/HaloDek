@@ -9,3 +9,4 @@ use Illuminate\Support\Facades\Route;
  */
 Route::get('/ping', [EmployeeApiController::class, 'ping'])->name('ping');
 Route::get('/employees', [EmployeeApiController::class, 'index'])->name('employees');
+Route::get('/organization', [EmployeeApiController::class, 'organization'])->name('organization');

@@ -2,7 +2,7 @@
  * Aman untuk aplikasi yang memuat data pribadi: HALAMAN (HTML) TIDAK PERNAH DISIMPAN.
  * Yang disimpan hanya berkas statis (CSS, JS, font, gambar) agar buka lebih cepat,
  * ditambah halaman offline sederhana saat tidak ada koneksi. */
-var VERSION = 'halodek-v2';
+var VERSION = 'halodek-v3';
 var CACHE = VERSION + '-static';
 var OFFLINE = 'offline.html';
 var STATIC_RE = /^(css|js|assets|images)\//;

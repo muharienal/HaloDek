@@ -134,7 +134,7 @@ class HousekeepingTest extends TestCase
         $this->assertSame('kurang dari 1 jam kerja', WorkHours::human(59));
         $this->assertSame('1 jam kerja', WorkHours::human(60));
         $this->assertSame('6.5 jam kerja', WorkHours::human(390));
-        $this->assertSame('–', WorkHours::human(null));
+        $this->assertSame('-', WorkHours::human(null));
 
         Carbon::setTestNow('2026-11-16 09:00'); // Senin
         $r = $this->reportWithPhoto();
@@ -161,6 +161,6 @@ class HousekeepingTest extends TestCase
         $head = $this->user(User::ROLE_KEPALA_REGU, 'it');
         $this->actingAs($head)->get(route('admin.reports.show', $r))
             ->assertSee('>Rendah</option>', false)
-            ->assertDontSee('Rendah — Bisa menunggu', false);
+            ->assertDontSee('Rendah - Bisa menunggu', false);
     }
 }

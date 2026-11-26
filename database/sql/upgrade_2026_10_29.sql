@@ -1,5 +1,5 @@
 -- =====================================================================
--- HaloDek — UPGRADE DATABASE 2026-10-29
+-- HaloDek - UPGRADE DATABASE 2026-10-29
 -- Dari skema lama (admin_it / admin_sarpras / admin_regu, SLA, rating, aset)
 -- ke skema baru (Kepala Regu / Staf, 4 regu, inventaris per regu).
 --

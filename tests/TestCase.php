@@ -61,7 +61,9 @@ abstract class TestCase extends BaseTestCase
             if ($path === '/api/v1/assets') {
                 $rows = array_values(array_filter($assets, fn ($a) => ($a['unit'] ?? null) === ($q['unit'] ?? '') && ($a['active'] ?? true) && (
                     (isset($q['holder_nik']) && ($a['holder']['nik'] ?? null) === $q['holder_nik'])
-                    || (isset($q['location_id']) && empty($a['holder']) && ($a['location']['id'] ?? null) == $q['location_id'])
+                    || (isset($q['holder_department']) && ($a['holder']['type'] ?? null) === 'bidang' && ($a['holder']['name'] ?? null) === 'Bidang '.$q['holder_department'])
+                    || (isset($q['holder_division']) && ($a['holder']['type'] ?? null) === 'divisi' && ($a['holder']['name'] ?? null) === 'Divisi '.$q['holder_division'])
+                    || (isset($q['location_id']) && (empty($a['holder']) || in_array($a['holder']['type'] ?? 'orang', ['bidang', 'divisi'], true)) && ($a['location']['id'] ?? null) == $q['location_id'])
                     || (isset($q['include_id']) && $a['id'] == $q['include_id'])
                 )));
 

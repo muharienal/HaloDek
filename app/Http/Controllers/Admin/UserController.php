@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Concerns\HandlesCsvImport;
 use App\Http\Controllers\Controller;
+use App\Models\Department;
+use App\Models\Division;
+use App\Models\Position;
 use App\Models\Report;
 use App\Models\Team;
 use App\Models\User;
@@ -31,8 +34,9 @@ class UserController extends Controller
         $role = $request->query('role', 'semua');
         $state = $request->query('state', 'semua');
         $teamId = $request->integer('team_id') ?: null;
+        $bidangId = $request->integer('bidang') ?: null;
 
-        $users = User::with('team')
+        $users = User::with(['team', 'division', 'bidang'])
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('name', 'like', "%{$search}%")
                 ->orWhere('nik', 'like', "%{$search}%")
@@ -41,14 +45,18 @@ class UserController extends Controller
             ->when($state === 'aktif', fn ($q) => $q->where('is_active', true))
             ->when($state === 'nonaktif', fn ($q) => $q->where('is_active', false))
             ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
+            ->when($bidangId, fn ($q) => $q->where('department_id', $bidangId))
             ->orderBy('name')
             ->paginate(15)
             ->withQueryString();
 
         $roleCounts = User::selectRaw('role, count(*) as c')->groupBy('role')->pluck('c', 'role');
         $teams = Team::ordered()->get();
+        $divisions = Division::ordered()->get(['id', 'name']);
+        $departments = Department::ordered()->get(['id', 'name', 'division_id']);
+        $positions = Position::ordered()->get(['id', 'name']);
 
-        return view('admin.users.index', compact('users', 'search', 'role', 'state', 'teamId', 'roleCounts', 'teams'));
+        return view('admin.users.index', compact('users', 'search', 'role', 'state', 'teamId', 'bidangId', 'roleCounts', 'teams', 'divisions', 'departments', 'positions'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -184,40 +192,62 @@ class UserController extends Controller
 
     public function template(): StreamedResponse
     {
-        return Csv::download('template-import-pengguna.csv', ['nik', 'name', 'role', 'phone', 'department', 'position', 'regu'], [
-            ['00010', 'Andi Wijaya', 'karyawan', '08123456789', 'Finance', 'Staf', ''],
-            ['00011', 'Rina Marlina', 'kepala_regu', '', 'Keamanan', 'Kepala Regu Keamanan', 'keamanan'],
-            ['00012', 'Joko Susilo', 'staf', '', 'Keamanan', 'Petugas Keamanan', 'keamanan'],
+        // Divisi/bidang/jabatan diisi persis seperti di Struktur Organisasi (huruf besar/kecil bebas).
+        $b = Department::with('division')->ordered()->first();
+        $j = Position::ordered()->first();
+        $ex = [$b?->division?->name ?? 'SDM, Umum & K3', $b?->name ?? 'Umum & IT', $j?->name ?? 'Staf'];
+
+        return Csv::download('template-import-pengguna.csv', ['nik', 'name', 'role', 'phone', 'divisi', 'bidang', 'jabatan', 'regu'], [
+            ['00010', 'Andi Wijaya', 'karyawan', '08123456789', ...$ex, ''],
+            ['00012', 'Joko Susilo', 'staf', '', ...$ex, 'keamanan'],
         ]);
     }
 
     public function export(): StreamedResponse
     {
         $rows = (function () {
-            foreach (User::with('team')->orderBy('name')->cursor() as $u) {
-                yield [$u->nik, $u->name, $u->role, $u->phone, $u->department, $u->position, $u->team->slug ?? '', $u->is_active ? 'aktif' : 'nonaktif'];
+            foreach (User::with(['team', 'division'])->orderBy('name')->cursor() as $u) {
+                yield [$u->nik, $u->name, $u->role, $u->phone, $u->division?->name, $u->department, $u->position, $u->team->slug ?? '', $u->is_active ? 'aktif' : 'nonaktif'];
             }
         })();
 
-        return Csv::download('pengguna-halodek-'.now()->format('Ymd').'.csv', ['nik', 'name', 'role', 'phone', 'department', 'position', 'regu', 'status'], $rows);
+        return Csv::download('pengguna-halodek-'.now()->format('Ymd').'.csv', ['nik', 'name', 'role', 'phone', 'divisi', 'bidang', 'jabatan', 'regu', 'status'], $rows);
     }
 
     public function import(Request $request)
     {
         $teams = Team::all()->keyBy(fn ($t) => mb_strtolower($t->slug));
         $roles = array_keys(config('halodek.roles'));
+        $lower = fn ($c) => $c->keyBy(fn ($r) => mb_strtolower(trim($r->name)));
+        $divs = $lower(Division::all());
+        $bids = $lower(Department::all());
+        $jabs = $lower(Position::all());
 
         $admins = 0;
-        $result = $this->runImport($request, ['nik', 'name'], function (array $d) use ($teams, $roles, &$admins) {
+        $result = $this->runImport($request, ['nik', 'name'], function (array $d) use ($teams, $roles, $divs, $bids, $jabs, &$admins) {
             $d['role'] = ($d['role'] ?? '') ?: 'karyawan';
+            // Kolom lama "department"/"position" tetap diterima sebagai bidang/jabatan.
+            $d['bidang'] = ($d['bidang'] ?? '') !== '' ? $d['bidang'] : ($d['department'] ?? '');
+            $d['jabatan'] = ($d['jabatan'] ?? '') !== '' ? $d['jabatan'] : ($d['position'] ?? '');
+            $pick = function ($list, string $col, string $label) use ($d) {
+                $name = trim((string) ($d[$col] ?? ''));
+                if ($name === '') {
+                    return null;
+                }
+                return $list[mb_strtolower($name)] ?? throw ValidationException::withMessages([$col => "{$label} \"{$name}\" belum ada di Struktur Organisasi."]);
+            };
+            $division = $pick($divs, 'divisi', 'Divisi');
+            $bidang = $pick($bids, 'bidang', 'Bidang');
+            $jabatan = $pick($jabs, 'jabatan', 'Jabatan');
+            if ($division && $bidang && $bidang->division_id && $bidang->division_id !== $division->id) {
+                throw ValidationException::withMessages(['bidang' => "Bidang \"{$bidang->name}\" bukan bagian dari divisi \"{$division->name}\"."]);
+            }
 
             $v = Validator::make($d, [
                 'nik' => ['required', 'string', 'max:50', 'unique:users,nik'],
                 'name' => ['required', 'string', 'max:255'],
                 'role' => ['required', Rule::in($roles)],
                 'phone' => ['nullable', 'string', 'max:30'],
-                'department' => ['nullable', 'string', 'max:100'],
-                'position' => ['nullable', 'string', 'max:100'],
             ])->validate();
 
             $team = null;
@@ -238,6 +268,9 @@ class UserController extends Controller
             }
 
             User::create(array_map(fn ($x) => $x === '' ? null : $x, $v) + [
+                'division_id' => $division?->id ?? $bidang?->division_id,
+                'department_id' => $bidang?->id,
+                'position_id' => $jabatan?->id,
                 'team_id' => in_array($v['role'], User::TEAM_ROLES, true) ? $team->id : null,
                 // Password acak tak diketahui; pengelola mendapat password sementara lewat "Atur ulang password".
                 'password' => User::unusablePassword(),
@@ -267,8 +300,9 @@ class UserController extends Controller
             'nik' => ['required', 'string', 'max:50', Rule::unique('users', 'nik')->ignore($user?->id)],
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
-            'department' => ['nullable', 'string', 'max:100'],
-            'position' => ['nullable', 'string', 'max:100'],
+            'division_id' => ['nullable', 'integer', 'exists:divisions,id'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'position_id' => ['nullable', 'integer', 'exists:positions,id'],
             'role' => ['required', Rule::in(array_keys(config('halodek.roles')))],
             'team_id' => ['nullable', 'integer', 'exists:teams,id'],
         ], [
@@ -285,6 +319,24 @@ class UserController extends Controller
             }
         } else {
             $data['team_id'] = null;
+        }
+
+        // Struktur harus runtut: Bidang milik Divisi yang dipilih, Regu milik Bidang yang dipilih.
+        // Bila bagian atas kosong, diisi otomatis dari bagian bawah (mis. pilih Regu -> Bidang & Divisi ikut).
+        $team = ! empty($data['team_id']) ? Team::find($data['team_id']) : null;
+        if ($team?->department_id) {
+            $data['department_id'] = $team->department_id; // anggota regu selalu di bidang regunya
+            $data['division_id'] = null; // diisi ulang dari bidang di bawah
+        }
+        $bidang = ! empty($data['department_id']) ? Department::find($data['department_id']) : null;
+        if ($bidang?->division_id) {
+            if (! empty($data['division_id']) && (int) $data['division_id'] !== (int) $bidang->division_id) {
+                throw ValidationException::withMessages(['department_id' => "Bidang {$bidang->name} bukan bagian dari divisi yang dipilih."]);
+            }
+            $data['division_id'] = $bidang->division_id;
+        }
+        foreach (['division_id', 'department_id', 'position_id'] as $k) {
+            $data[$k] = ($data[$k] ?? null) ?: null;
         }
 
         // Satu regu hanya punya satu Kepala Regu.

@@ -11,8 +11,8 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Ringkasan harian lewat WhatsApp untuk manajer (WA_TO), pengganti pesan per laporan.
- * Dikirim sekali per hari kerja setelah jam WA_RINGKASAN_JAM (bawaan 16:00), dipicu saat
+ * Ringkasan harian lewat WhatsApp (penerima: aturan "Ringkasan harian" di Administrasi › WhatsApp).
+ * Dikirim sekali per hari kerja setelah jam ringkasan (Administrasi › WhatsApp, bawaan 16:00), dipicu saat
  * aplikasi dibuka (tanpa Task Scheduler) atau lewat `php artisan halodek:ringkasan-harian`.
  */
 class DailyDigest
@@ -29,12 +29,41 @@ class DailyDigest
         $now ??= now();
         $cfg = config('services.whatsapp');
 
-        return ($cfg['driver'] ?? 'off') !== 'off'
-            && ($cfg['manager_mode'] ?? 'harian') === 'harian'
-            && $this->wa->managerNumbers($cfg) !== []
+        // Pemeriksaan murah dulu; daftar penerima (query) paling akhir.
+        return in_array($cfg['driver'] ?? 'off', ['fonnte', 'log'], true)
             && WorkHours::isWorkday($now)
             && $now->format('H:i') >= $this->sendTime()
-            && ! Cache::has(self::SENT_KEY.$now->toDateString());
+            && ! Cache::has(self::SENT_KEY.$now->toDateString())
+            && $this->recipients() !== [];
+    }
+
+    /**
+     * Penerima ringkasan: '*' = rekap semua regu (Superadmin, Manajer),
+     * id regu = rekap regu itu untuk Kepala Regunya.
+     *
+     * @return array<string|int, array<int, string>>
+     */
+    public function recipients(): array
+    {
+        $all = [];
+        $teams = [];
+        foreach ($this->wa->usersFor('ringkasan', null) as $u) {
+            $all[] = $u->waNumber();
+        }
+        $all = array_values(array_unique(array_filter($all)));
+
+        if (\App\Support\WaRules::roleWants(\App\Models\User::ROLE_KEPALA_REGU, 'ringkasan')) {
+            $heads = \App\Models\User::active()->where('role', \App\Models\User::ROLE_KEPALA_REGU)->whereNotNull('team_id')->whereNotNull('phone')->get()
+                ->filter(fn ($u) => $u->wantsWa('ringkasan') && $u->waNumber());
+            foreach ($heads->groupBy('team_id') as $teamId => $group) {
+                $nums = array_values(array_diff($group->map->waNumber()->unique()->all(), $all));
+                if ($nums) {
+                    $teams[$teamId] = $nums;
+                }
+            }
+        }
+
+        return array_filter(['*' => $all] + $teams);
     }
 
     /** Dipanggil setelah respons halaman terkirim (RunBackgroundTasks). */
@@ -60,15 +89,24 @@ class DailyDigest
     /** @return int jumlah nomor yang berhasil dikirimi (0 = tidak ada yang dikirim) */
     public function send(CarbonInterface $day): int
     {
-        $message = $this->message($day);
-        if ($message === null) {
-            Cache::put(self::SENT_KEY.$day->toDateString(), 'kosong', now()->addDays(3));
-
-            return 0;
+        $sent = 0;
+        $anything = false;
+        foreach ($this->recipients() as $scope => $numbers) {
+            $team = $scope === '*' ? null : Team::find($scope);
+            if ($scope !== '*' && ! $team) {
+                continue;
+            }
+            $message = $this->message($day, $team);
+            if ($message === null) {
+                continue;
+            }
+            $anything = true;
+            $sent += $this->wa->sendNow($numbers, $message);
         }
 
-        $sent = $this->wa->sendToManagers($message);
-        if ($sent > 0) {
+        if (! $anything) {
+            Cache::put(self::SENT_KEY.$day->toDateString(), 'kosong', now()->addDays(3));
+        } elseif ($sent > 0) {
             Cache::put(self::SENT_KEY.$day->toDateString(), now()->toIso8601String(), now()->addDays(3));
         }
 
@@ -76,16 +114,17 @@ class DailyDigest
     }
 
     /** Teks ringkasan; null bila tidak ada apa pun untuk dilaporkan hari itu. */
-    public function message(CarbonInterface $day): ?string
+    public function message(CarbonInterface $day, ?Team $only = null): ?string
     {
         $from = $day->copy()->startOfDay();
         $to = $day->copy()->endOfDay();
+        $scope = fn ($q) => $only ? $q->where('team_id', $only->id) : $q;
 
-        $teams = Team::orderBy('name')->get(['id', 'name']);
-        $created = Report::whereBetween('created_at', [$from, $to])->selectRaw('team_id, count(*) as n')->groupBy('team_id')->pluck('n', 'team_id');
-        $done = Report::where('status', 'selesai')->whereBetween('resolved_at', [$from, $to])->count();
-        $rejected = Report::where('status', 'ditolak')->whereBetween('rejected_at', [$from, $to])->count();
-        $open = Report::open()->with('team')->get();
+        $teams = $only ? collect([$only]) : Team::orderBy('name')->get(['id', 'name']);
+        $created = $scope(Report::whereBetween('created_at', [$from, $to]))->selectRaw('team_id, count(*) as n')->groupBy('team_id')->pluck('n', 'team_id');
+        $done = $scope(Report::where('status', 'selesai')->whereBetween('resolved_at', [$from, $to]))->count();
+        $rejected = $scope(Report::where('status', 'ditolak')->whereBetween('rejected_at', [$from, $to]))->count();
+        $open = $scope(Report::open())->with('team')->get();
         $waiting = $open->whereNull('assigned_to_id');
         $overdue = $waiting->filter->isOverdue();
         $urgent = $open->whereIn('priority', ['tinggi', 'mendesak']);
@@ -96,13 +135,13 @@ class DailyDigest
         }
 
         $lines = [
-            '*RINGKASAN HALODEK*',
+            '*Ringkasan HaloDek*'.($only ? ' · Regu '.$only->name : ''),
             $day->translatedFormat('l, d F Y'),
             '',
             '*Hari ini*',
             'Laporan baru: '.$newTotal,
         ];
-        foreach ($teams as $t) {
+        foreach ($only ? [] : $teams as $t) {
             if ($n = (int) ($created[$t->id] ?? 0)) {
                 $lines[] = '  • Regu '.$t->name.': '.$n;
             }
@@ -117,7 +156,7 @@ class DailyDigest
             $lines[] = '';
             $lines[] = '*Prioritas tinggi/mendesak yang belum selesai*';
             foreach ($urgent->sortByDesc(fn ($r) => $r->priority === 'mendesak')->take(5) as $r) {
-                $lines[] = '• '.$r->report_number.' · '.\Illuminate\Support\Str::limit($r->title, 60).' (Regu '.($r->team->name ?? '-').')';
+                $lines[] = '• '.$r->report_number.' · '.\Illuminate\Support\Str::limit($r->title, 60).($only ? '' : ' (Regu '.($r->team->name ?? '-').')');
             }
             if ($urgent->count() > 5) {
                 $lines[] = '…dan '.($urgent->count() - 5).' lainnya.';

@@ -7,7 +7,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * Hitungan JAM KERJA (bukan jam kalender), sesuai config('halodek.work_hours'):
- * bawaan Senin–Jumat 07:00–16:00 WIB, tanpa hari libur yang didaftarkan.
+ * bawaan Senin-Jumat 07:00-16:00 WIB, tanpa hari libur yang didaftarkan.
  * Dipakai untuk durasi respons/penyelesaian dan batas respons laporan.
  */
 class WorkHours
@@ -79,7 +79,7 @@ class WorkHours
     public static function human(?int $minutes): string
     {
         if ($minutes === null) {
-            return '–';
+            return '-';
         }
         if ($minutes < 60) {
             return 'kurang dari 1 jam kerja';
@@ -89,17 +89,17 @@ class WorkHours
         return ($h == (int) $h ? (int) $h : $h).' jam kerja';
     }
 
-    /** Teks singkat untuk tampilan, mis. "Sen–Jum 07.00–16.00". */
+    /** Teks singkat untuk tampilan, mis. "Sen-Jum 07.00-16.00". */
     public static function label(): string
     {
         $cfg = config('halodek.work_hours');
         $names = [1 => 'Sen', 2 => 'Sel', 3 => 'Rab', 4 => 'Kam', 5 => 'Jum', 6 => 'Sab', 7 => 'Min'];
         $days = $cfg['days'];
         $range = count($days) > 1 && max($days) - min($days) === count($days) - 1
-            ? $names[min($days)].'–'.$names[max($days)]
+            ? $names[min($days)].'-'.$names[max($days)]
             : implode(', ', array_map(fn ($d) => $names[$d], $days));
 
-        return $range.' '.str_replace(':', '.', $cfg['start']).'–'.str_replace(':', '.', $cfg['end']);
+        return $range.' '.str_replace(':', '.', $cfg['start']).'-'.str_replace(':', '.', $cfg['end']);
     }
 
     /** @return array{0:Carbon,1:Carbon} */

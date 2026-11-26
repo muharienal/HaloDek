@@ -1,0 +1,2 @@
+<form method="POST" action="{{ route('admin.org.destroy', [$type, $row->id]) }}" data-confirm="Hapus {{ $label }} &quot;{{ $row->name }}&quot;? Hanya bisa bila tidak dipakai pengguna{{ $type === 'jabatan' ? '' : ' atau '.($type === 'divisi' ? 'bidang' : 'regu') }}." data-confirm-title="Hapus {{ $label }}">@csrf @method('DELETE')
+    <button class="btn btn-soft-danger btn-sm btn-icon" aria-label="Hapus {{ $row->name }}" title="Hapus"><x-icon name="trash" :size="15" /></button></form>

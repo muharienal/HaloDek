@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Support\Phone;
+use App\Support\WaRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -27,7 +28,16 @@ class ProfileController extends Controller
             return back()->withInput()->withErrors(['phone' => self::PHONE_ERROR]);
         }
 
-        $user->update(['phone' => $phone]);
+        $data = ['phone' => $phone];
+        if ($request->boolean('wa_prefs')) {
+            // Yang tidak dicentang = dimatikan. Kabar yang sedang dimatikan Superadmin tidak ikut diubah.
+            $choices = array_keys(WaRules::personalChoices((string) $user->role));
+            $on = array_intersect($choices, (array) $request->input('wa_on', []));
+            $keep = array_diff((array) ($user->wa_off ?? []), $choices);
+            $off = array_values(array_unique(array_merge($keep, array_diff($choices, $on))));
+            $data['wa_off'] = $off ?: null;
+        }
+        $user->update($data);
 
         return back()->with('success', 'Profil berhasil diperbarui.');
     }
@@ -49,7 +59,9 @@ class ProfileController extends Controller
 
         $request->user()->update(['phone' => $phone]);
 
-        return back()->with('success', 'Nomor WhatsApp disimpan. Anda akan mendapat kabar saat laporan diproses atau selesai.');
+        $when = \App\Support\WaRules::promptPhrase((string) $request->user()->role);
+
+        return back()->with('success', 'Nomor WhatsApp disimpan.'.($when && WaRules::active() ? ' Anda akan mendapat kabar '.$when.'.' : ''));
     }
 
     public function password(Request $request): RedirectResponse

@@ -1,0 +1,31 @@
+# HTTPS untuk HaloDek (8443) dan Inventaris (8444) di Laragon.
+# Salin ke C:\laragon\etc\apache2\sites-enabled\pcs-https.conf, sesuaikan folder & nama berkas sertifikat,
+# lalu Laragon > Apache > SSL > Enabled dan Reload. Langkah lengkap: README bagian "Mengaktifkan HTTPS".
+# Berkas yang sama juga ada di folder deploy Inventaris; cukup dipasang SATU kali.
+
+Listen 8443
+Listen 8444
+
+<VirtualHost *:8443>
+    DocumentRoot "D:/halodek/public"
+    ServerName laptop-3rt83m6j
+    SSLEngine on
+    SSLCertificateFile    "C:/laragon/etc/ssl/pcs.pem"
+    SSLCertificateKeyFile "C:/laragon/etc/ssl/pcs-key.pem"
+    <Directory "D:/halodek/public">
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>
+
+<VirtualHost *:8444>
+    DocumentRoot "D:/inventaris/public"
+    ServerName laptop-3rt83m6j
+    SSLEngine on
+    SSLCertificateFile    "C:/laragon/etc/ssl/pcs.pem"
+    SSLCertificateKeyFile "C:/laragon/etc/ssl/pcs-key.pem"
+    <Directory "D:/inventaris/public">
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>

@@ -26,6 +26,7 @@ class SearchController extends Controller
                 ->where(function ($w) use ($like, $user) {
                     $w->where('report_number', 'like', $like)
                         ->orWhere('title', 'like', $like)
+                        ->orWhere('description', 'like', $like)
                         ->orWhere('reporter_name', 'like', $like);
                     if ($user->isAdmin()) {
                         $w->orWhereHas('user', fn ($u) => $u->where('nik', 'like', $like));

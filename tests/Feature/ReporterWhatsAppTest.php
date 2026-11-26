@@ -17,7 +17,7 @@ class ReporterWhatsAppTest extends TestCase
 
     private function fonnte(): void
     {
-        config(['services.whatsapp' => ['driver' => 'fonnte', 'to' => '', 'token' => 'tok', 'secret' => '', 'wablas_url' => 'https://x.test', 'timeout' => 5]]);
+        config(['services.whatsapp' => ['driver' => 'fonnte', 'to' => '', 'token' => 'tok', 'timeout' => 5]]);
         Http::fake(['api.fonnte.com/*' => Http::response(['status' => true])]);
     }
 
@@ -47,9 +47,18 @@ class ReporterWhatsAppTest extends TestCase
     public function test_prompt_shows_once_per_login_for_karyawan_without_number(): void
     {
         $this->seedTeams();
+        config(['services.whatsapp.driver' => 'log']); // ajakan isi nomor hanya muncul bila WhatsApp menyala
         $emp = $this->user();
 
-        $this->actingAs($emp)->get(route('dashboard'))->assertOk()->assertSee('id="wa-modal"', false)->assertSee('data-auto-open', false);
+        $this->actingAs($emp)->get(route('dashboard'))->assertOk()->assertSee('id="wa-modal"', false)->assertSee('data-auto-open', false)
+            ->assertSee('saat laporan Anda diproses, selesai, atau ditolak');
+        // WhatsApp dimatikan: tidak ada ajakan sama sekali.
+        config(['services.whatsapp.driver' => 'off']);
+        $this->flushSession();
+        $this->actingAs($emp)->get(route('dashboard'))->assertOk()->assertDontSee('data-auto-open', false)->assertDontSee('class="wa-chip"', false);
+        config(['services.whatsapp.driver' => 'log']);
+        $this->flushSession();
+        $this->actingAs($emp)->get(route('dashboard'))->assertSee('data-auto-open', false);
         // halaman berikutnya di sesi yang sama tidak membukanya otomatis lagi (badge di header tetap ada)
         $this->get(route('dashboard'))->assertOk()->assertDontSee('data-auto-open', false)->assertSee('class="wa-chip"', false);
 
@@ -120,6 +129,7 @@ class ReporterWhatsAppTest extends TestCase
     public function test_single_number_everywhere_auto_62_and_badge_after_dismiss(): void
     {
         $this->seedTeams();
+        config(['services.whatsapp.driver' => 'log']); // ajakan isi nomor hanya muncul bila WhatsApp menyala
         $emp = $this->user();
 
         // Profil: hanya satu kolom nomor, tanpa kartu "Cara Masuk".

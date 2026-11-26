@@ -60,7 +60,7 @@ class OverdueReminder
                 // Tandai dulu agar tidak terkirim ganda bila ada proses lain berjalan bersamaan.
                 Report::whereIn('id', $reports->pluck('id'))->whereNull('reminded_at')->update(['reminded_at' => now()]);
                 foreach ($reports as $r) {
-                    $this->notify->toHead($team, 'Lewat batas respons '.$r->report_number, "\"{$r->title}\" belum diambil siapa pun. Mohon ambil atau tugaskan.", $r);
+                    $this->notify->toHead($team, 'Lewat batas respons '.$r->report_number, "\"{$r->title}\" ({$r->summary(60)}) belum diambil siapa pun. Mohon ambil atau tugaskan.", $r);
                 }
                 $sent = $this->wa->overdueReminder($team, $reports->values());
             }

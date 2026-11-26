@@ -117,21 +117,18 @@ class SystemStatus
     {
         $cfg = config('services.whatsapp');
         $driver = $cfg['driver'] ?? 'off';
-        $to = app(WhatsAppNotifier::class)->managerNumbers($cfg);
-        $mode = ['harian' => 'ringkasan harian jam '.app(DailyDigest::class)->sendTime(), 'setiap' => 'setiap laporan baru', 'off' => 'tidak dikirimi'][$cfg['manager_mode'] ?? 'harian'] ?? 'ringkasan harian';
-        $summary = 'Manajer ('.($to ? count($to).' nomor' : 'WA_TO kosong')."): {$mode}. Kepala Regu: prioritas ".implode('/', $cfg['head_priorities'] ?? []).'.';
+        $withWa = \App\Models\User::active()->whereNotNull('phone')->where('phone', '!=', '')->get(['id', 'phone'])->filter(fn ($u) => $u->waNumber())->count();
+        $summary = "{$withWa} pengguna aktif punya No. WhatsApp.";
+        $menu = ' Atur di Administrasi › WhatsApp.';
 
-        if ($driver === 'off') {
-            return $this->row('WhatsApp', 'info', 'Nonaktif (WA_DRIVER=off).');
-        }
         if ($driver === 'log') {
-            return $this->row('WhatsApp', 'info', 'Mode uji: pesan hanya ditulis ke log. '.$summary);
-        }
-        if (blank($cfg['token'] ?? null)) {
-            return $this->row('WhatsApp', 'error', 'WA_TOKEN kosong.');
+            return $this->row('WhatsApp', 'info', 'Mode uji: pesan hanya ditulis ke log, tidak terkirim. '.$summary);
         }
         if ($driver !== 'fonnte') {
-            return $this->row('WhatsApp', 'ok', ucfirst($driver).' diatur (status perangkat tidak bisa dicek otomatis). '.$summary);
+            return $this->row('WhatsApp', 'info', ($driver === 'off' ? 'Nonaktif.' : "Pengirim \"{$driver}\" tidak dikenal (hanya Fonnte), WhatsApp dianggap mati.").$menu);
+        }
+        if (blank($cfg['token'] ?? null)) {
+            return $this->row('WhatsApp', 'error', 'Token Fonnte belum diisi.'.$menu);
         }
 
         try {
@@ -142,7 +139,7 @@ class SystemStatus
         }
 
         if (! $res->successful() || ($j['status'] ?? null) === false) {
-            return $this->row('WhatsApp', 'error', 'Fonnte menolak token: '.$this->short((string) ($j['reason'] ?? $j['detail'] ?? 'HTTP '.$res->status())));
+            return $this->row('WhatsApp', 'error', 'Fonnte menolak token: '.$this->short((string) ($j['reason'] ?? $j['detail'] ?? 'HTTP '.$res->status())).'.'.$menu);
         }
         $connected = ($j['device_status'] ?? '') === 'connect';
         $quota = isset($j['quota']) ? ' Kuota: '.$j['quota'].'.' : '';
@@ -220,7 +217,7 @@ class SystemStatus
 
         $rows[] = request()->isSecure()
             ? $this->row('HTTPS', 'ok', 'Koneksi terenkripsi.')
-            : $this->row('HTTPS', 'warn', 'Masih http://. Password admin terkirim tanpa enkripsi di jaringan. Bisa diaktifkan lewat SSL Laragon.');
+            : $this->row('HTTPS', 'warn', 'Masih http://. Password terkirim tanpa enkripsi, dan tombol "Pasang Aplikasi" belum bisa sekali klik (browser hanya mengizinkannya lewat HTTPS). Cara mengaktifkan: README bagian "Mengaktifkan HTTPS".');
 
         return $rows;
     }

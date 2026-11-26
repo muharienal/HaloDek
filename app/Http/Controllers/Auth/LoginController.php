@@ -96,7 +96,7 @@ class LoginController extends Controller
     private function finish(Request $request): RedirectResponse
     {
         $request->session()->regenerate();
-        $request->session()->forget('wa_prompt_seen');
+        $request->session()->forget(['wa_prompt_seen', 'pwa_prompt_seen']);
         $request->user()->forceFill(['last_login_at' => now()])->saveQuietly();
 
         return redirect()->intended(route('dashboard'))

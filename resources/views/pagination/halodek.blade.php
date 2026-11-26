@@ -1,6 +1,6 @@
 @if ($paginator->hasPages())
     <nav class="pagination" aria-label="Navigasi halaman">
-        <span class="text-sm muted">Menampilkan {{ $paginator->firstItem() ?? 0 }}–{{ $paginator->lastItem() ?? 0 }} dari {{ $paginator->total() }} data</span>
+        <span class="text-sm muted">Menampilkan {{ $paginator->firstItem() ?? 0 }}-{{ $paginator->lastItem() ?? 0 }} dari {{ $paginator->total() }} data</span>
         @if ($paginator->hasPages())
             <div class="pages">
                 @if ($paginator->onFirstPage())<span class="pg off">‹</span>@else<a class="pg" href="{{ $paginator->previousPageUrl() }}" rel="prev">‹</a>@endif

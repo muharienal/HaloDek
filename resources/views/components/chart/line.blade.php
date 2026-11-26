@@ -27,7 +27,7 @@
         <polygon points="{{ $area }}" fill="{{ $s['color'] }}" opacity=".08" />
         <polyline points="{{ $pts }}" fill="none" stroke="{{ $s['color'] }}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
         @foreach ($s['data'] as $i => $v)
-            <circle cx="{{ round($x($i), 1) }}" cy="{{ round($y($v), 1) }}" r="3.2" fill="#fff" stroke="{{ $s['color'] }}" stroke-width="2"><title>{{ $labels[$i] }} — {{ $s['name'] }}: {{ $v }}</title></circle>
+            <circle cx="{{ round($x($i), 1) }}" cy="{{ round($y($v), 1) }}" r="3.2" fill="#fff" stroke="{{ $s['color'] }}" stroke-width="2"><title>{{ $labels[$i] }} - {{ $s['name'] }}: {{ $v }}</title></circle>
         @endforeach
     @endforeach
 </svg>

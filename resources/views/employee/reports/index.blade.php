@@ -20,7 +20,7 @@
                     <div class="search-trigger is-filled"><x-icon name="search" :size="16" /><button type="button" data-search-open class="search-trigger-text">“{{ \Illuminate\Support\Str::limit($search, 40) }}”</button>
                         <a href="{{ route('employee.reports.index', array_filter(['status' => $status, 'team_id' => $teamId])) }}" class="search-clear" title="Hapus pencarian" aria-label="Hapus pencarian"><x-icon name="x" :size="14" /></a></div>
                 @else
-                    <button type="button" class="search-trigger" data-search-open><x-icon name="search" :size="16" /> <span>No. laporan atau judul…</span></button>
+                    <button type="button" class="search-trigger" data-search-open><x-icon name="search" :size="16" /> <span>No. laporan atau isi laporan…</span></button>
                 @endif
             </div>
             <div class="field"><label class="label" for="team_id">Regu</label>
@@ -33,12 +33,12 @@
         @else
             <div class="table-wrap mt-4">
                 <table class="table">
-                    <thead><tr><th>No. Laporan</th><th>Judul</th><th>Regu</th><th>Status</th><th></th></tr></thead>
+                    <thead><tr><th>No. Laporan</th><th>Laporan</th><th>Regu</th><th>Status</th><th></th></tr></thead>
                     <tbody>
                     @foreach ($reports as $r)
                         <tr>
                             <td><a class="mono strong" href="{{ route('employee.reports.show', $r) }}">{{ $r->report_number }}</a><div class="text-xs muted">{{ $r->created_at->translatedFormat('d M Y H:i') }}</div></td>
-                            <td style="max-width:300px"><div class="truncate strong">{{ $r->title }}</div><div class="text-xs muted">{{ $r->categoryDisplayName() }}</div></td>
+                            <td style="max-width:300px"><div class="truncate strong">{{ $r->title }}</div><div class="truncate text-xs muted">{{ $r->summary(70) }}</div></td>
                             <td><x-team-chip :team="$r->team" /></td>
                             <td><x-badge :tone="$r->statusTone()">{{ $r->statusLabel() }}</x-badge></td>
                             <td class="text-right"><a class="btn btn-ghost btn-sm" href="{{ route('employee.reports.show', $r) }}">Detail <x-icon name="chevron-right" :size="14" /></a></td>

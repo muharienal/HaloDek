@@ -43,7 +43,7 @@ class Report extends Model
 
         // Laporan yang terkait barang dikabarkan ke Inventaris (riwayat aset) saat dibuat / berganti status.
         static::saved(function (Report $r) {
-            if ($r->asset_id && ($r->wasRecentlyCreated || $r->wasChanged(['status', 'title', 'asset_id']))) {
+            if ($r->asset_id && ($r->wasRecentlyCreated || $r->wasChanged(['status', 'title', 'asset_id', 'assigned_to_id', 'follow_up_note', 'team_id', 'category_id']))) {
                 app(\App\Services\InventoryClient::class)->pushReportLater($r);
             }
         });
@@ -75,6 +75,12 @@ class Report extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /** Laporan utama, bila laporan ini ditutup karena ganda. */
+    public function duplicateOf(): BelongsTo
+    {
+        return $this->belongsTo(Report::class, 'duplicate_of_id');
     }
 
     public function assignee(): BelongsTo
@@ -141,6 +147,7 @@ class Report extends Model
     public function canStillAppeal(): bool
     {
         return $this->status === 'ditolak'
+            && $this->duplicate_of_id === null // laporan ganda tidak dibanding: masalahnya ditangani di laporan utama
             && $this->appealed_at === null
             && $this->rejected_at
             && $this->rejected_at->gt(now()->subDays((int) config('halodek.reopen_days', 7)));
@@ -151,6 +158,12 @@ class Report extends Model
         return $this->status === 'selesai'
             && $this->resolved_at
             && $this->resolved_at->gt(now()->subDays((int) config('halodek.reopen_days', 7)));
+    }
+
+    /** Potongan deskripsi satu baris, pembeda laporan yang judul otomatisnya sama. */
+    public function summary(int $limit = 90): string
+    {
+        return \Illuminate\Support\Str::limit(trim((string) preg_replace('/\s+/', ' ', (string) $this->description)), $limit);
     }
 
     public function categoryDisplayName(): string
@@ -192,13 +205,13 @@ class Report extends Model
     /** Lama penyelesaian untuk tampilan, mis. "kurang dari 1 jam kerja". */
     public function resolutionText(): string
     {
-        return $this->resolved_at ? WorkHours::human($this->resolve_work_minutes ?? WorkHours::minutesBetween($this->created_at, $this->resolved_at)) : '–';
+        return $this->resolved_at ? WorkHours::human($this->resolve_work_minutes ?? WorkHours::minutesBetween($this->created_at, $this->resolved_at)) : '-';
     }
 
     /** Lama sampai respons pertama untuk tampilan (jam kerja). */
     public function responseText(): string
     {
-        return $this->first_response_at ? WorkHours::human($this->respond_work_minutes ?? WorkHours::minutesBetween($this->created_at, $this->first_response_at)) : '–';
+        return $this->first_response_at ? WorkHours::human($this->respond_work_minutes ?? WorkHours::minutesBetween($this->created_at, $this->first_response_at)) : '-';
     }
 
     /** Batas respons: waktu paling lambat laporan diambil/ditugaskan (dihitung dalam jam kerja). */

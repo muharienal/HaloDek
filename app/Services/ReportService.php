@@ -81,7 +81,7 @@ class ReportService
             $this->notify->toTeam(
                 $team,
                 'Laporan baru '.$report->report_number,
-                "{$user->name} mengajukan: \"{$report->title}\" (prioritas {$report->priorityLabel()}).",
+                "{$user->name} mengajukan \"{$report->title}\" (prioritas {$report->priorityLabel()}): {$report->summary(80)}",
                 $report,
                 [$user->id],
             );
@@ -117,7 +117,8 @@ class ReportService
      */
     public function followUp(Report $report, User $actor, array $data, array $files = []): Report
     {
-        DB::transaction(function () use ($report, $actor, $data, $files) {
+        $waAssignee = null;
+        DB::transaction(function () use ($report, $actor, $data, $files, &$waAssignee) {
             $this->lockFresh($report);
             if ($report->status === 'dibatalkan') {
                 throw new ReportConflict('Laporan ini sudah dibatalkan pelapor sehingga tidak dapat diubah lagi.');
@@ -142,7 +143,8 @@ class ReportService
                 $assignee = $report->assigned_to_id ? User::find($report->assigned_to_id) : null;
                 $this->log($report, $actor, 'assigned', $assignee ? "Penanggung jawab: {$assignee->name}." : 'Penanggung jawab dilepas, laporan kembali menunggu diambil.');
                 if ($assignee && $assignee->id !== $actor->id) {
-                    $this->notify->toUser($assignee, 'Tugas baru '.$report->report_number, "Anda ditugaskan menangani: \"{$report->title}\".", $report);
+                    $this->notify->toUser($assignee, 'Tugas baru '.$report->report_number, "Anda ditugaskan menangani \"{$report->title}\": {$report->summary(80)}", $report);
+                    $waAssignee = $assignee;
                 }
                 $changes[] = 'assigned';
 
@@ -157,6 +159,9 @@ class ReportService
             if ($statusChanged) {
                 $old = $report->statusLabel();
                 $report->status = $data['status'];
+                if ($report->status !== 'ditolak') {
+                    $report->duplicate_of_id = null; // dibuka/diselesaikan sendiri: bukan laporan ganda lagi
+                }
 
                 if ($report->status === 'selesai') {
                     $report->resolved_at = $now;
@@ -200,6 +205,11 @@ class ReportService
 
             $report->save();
             $this->files->storeMany($report, $files, 'penyelesaian', $actor);
+
+            // WA penugasan setelah semua tersimpan; penanggung jawab yang langsung dilepas lagi tidak dikabari.
+            if ($waAssignee && (int) $report->assigned_to_id === $waAssignee->id) {
+                app(WhatsAppNotifier::class)->assigned($report, $waAssignee, $actor);
+            }
 
             // Staf yang menutup laporan: kepala regu ikut diberi tahu.
             if ($statusChanged && $actor->isStaf() && in_array($report->status, ['selesai', 'ditolak'], true)) {
@@ -245,6 +255,7 @@ class ReportService
 
         $report->load('team');
         $this->notify->toTeam($to, 'Laporan dialihkan '.$report->report_number, "Laporan \"{$report->title}\" dialihkan dari {$from->name}.", $report, [$actor->id]);
+        app(WhatsAppNotifier::class)->transferred($report, $actor);
 
         if ($report->user_id && $report->user_id !== $actor->id) {
             $this->notify->toUser($report->user_id, 'Laporan dialihkan '.$report->report_number, "Laporan Anda dialihkan ke {$to->name} agar ditangani regu yang tepat.", $report);
@@ -273,6 +284,7 @@ class ReportService
         });
 
         if (! $internal) {
+            app(WhatsAppNotifier::class)->reply($report, $actor, $message);
             if ($actor->isAdmin()) {
                 if ($report->user_id && $report->user_id !== $actor->id) {
                     $this->notify->toUser($report->user_id, 'Balasan baru '.$report->report_number, "{$actor->name}: ".str($message)->limit(120), $report);
@@ -350,8 +362,9 @@ class ReportService
         } else {
             $this->notify->toTeam($report->team, $title, $body, $report, [$actor->id]);
         }
+        app(WhatsAppNotifier::class)->objection($report->refresh(), 'LAPORAN DIBUKA LAGI: BELUM BERES', $reason);
 
-        return $report->refresh();
+        return $report;
     }
 
     /**
@@ -380,7 +393,45 @@ class ReportService
         $report->loadMissing('team');
         $title = 'Banding laporan '.$report->report_number;
         $this->notify->toHead($report->team, $title, "{$actor->name}: \"".str($reason)->limit(120).'"', $report, [$actor->id]);
-        app(WhatsAppNotifier::class)->headAlert($report, 'BANDING LAPORAN DITOLAK', $reason);
+        app(WhatsAppNotifier::class)->objection($report->refresh(), 'BANDING LAPORAN DITOLAK', $reason);
+
+        return $report->refresh();
+    }
+
+    // --------------------------------------------------------- laporan ganda
+
+    /**
+     * Tutup laporan ganda dan tautkan ke laporan utama yang sedang ditangani (status "Ditolak",
+     * alasan otomatis, tanpa banding). Pelapor diarahkan ke laporan utama.
+     */
+    public function markDuplicate(Report $report, User $actor, Report $master): Report
+    {
+        DB::transaction(function () use ($report, $actor, $master) {
+            $this->lockFresh($report);
+            if (! $report->isOpen()) {
+                throw new ReportConflict("Laporan {$report->report_number} sudah {$report->statusLabel()} sehingga tidak bisa digabung.");
+            }
+            if ($master->id === $report->id || $master->duplicate_of_id || in_array($master->status, ['ditolak', 'dibatalkan'], true)) {
+                throw new ReportConflict("Laporan {$master->report_number} tidak bisa menjadi laporan utama (sudah ditutup atau juga laporan ganda).");
+            }
+
+            $note = "Laporan yang sama sudah ada: {$master->report_number}. Penanganan dilanjutkan di laporan itu.";
+            $report->forceFill([
+                'status' => 'ditolak',
+                'duplicate_of_id' => $master->id,
+                'assigned_to_id' => null,
+                'follow_up_note' => $note,
+                'rejected_at' => now(),
+                'first_response_at' => $report->first_response_at ?? now(),
+            ])->save();
+            $this->log($report, $actor, 'merged', "Digabung ke laporan {$master->report_number} karena masalahnya sama.");
+            $this->log($master, $actor, 'merged', "Laporan {$report->report_number} dari {$report->reporter_name} digabung ke laporan ini.");
+        });
+
+        if ($report->user_id && $report->user_id !== $actor->id) {
+            $this->notify->toUser($report->user_id, 'Laporan digabung '.$report->report_number, "Masalah yang sama sudah dilaporkan ({$master->report_number}) dan sedang ditangani.", $report);
+            app(WhatsAppNotifier::class)->reporterUpdate($report->refresh());
+        }
 
         return $report->refresh();
     }

@@ -29,7 +29,7 @@ class SystemStatusTest extends TestCase
         $this->seedTeams();
         config([
             'services.inventaris.url' => 'http://inv.test', 'services.inventaris.token' => 'token-rahasia-0123456789',
-            'services.whatsapp' => ['driver' => 'fonnte', 'to' => '62811111', 'token' => 'tok', 'secret' => '', 'wablas_url' => '', 'timeout' => 5,
+            'services.whatsapp' => ['driver' => 'fonnte', 'token' => 'tok', 'timeout' => 5,
                 'manager_mode' => 'harian', 'digest_at' => '16:00', 'head_priorities' => ['tinggi']],
         ]);
         Http::fake([
@@ -40,15 +40,16 @@ class SystemStatusTest extends TestCase
 
         $log = storage_path('logs/laravel.log');
         $old = File::exists($log) ? File::get($log) : null;
-        File::append($log, "[2026-11-25 09:34:17] local.ERROR: SQLSTATE[42S02]: Table 'halodek.report_activities' doesn't exist in engine {\"userId\":1,\"exception\":\"[object] ...\"}\n");
+        // Waktu paling baru agar tetap termasuk 10 galat terakhir walau log tes sudah berisi galat lain.
+        File::append($log, '['.now()->addYear()->format('Y-m-d H:i:s').'] local.ERROR: SQLSTATE[42S02]: Table \'halodek.report_activities\' doesn\'t exist in engine {"userId":1,"exception":"[object] ..."}'."\n");
 
         try {
-            $super = $this->user(User::ROLE_SUPERADMIN);
+            $super = $this->user(User::ROLE_SUPERADMIN, null, ['phone' => '081233334444']);
             $this->actingAs($super)->get(route('admin.status.index'))
                 ->assertOk()->assertSee('Token ditolak')->assertSee('TERPUTUS')->assertSee("doesn't exist in engine")->assertDontSee('userId');
 
             $this->actingAs($super)->post(route('admin.status.wa-test'))->assertSessionHas('success');
-            Http::assertSent(fn ($r) => str_contains($r->url(), '/send') && str_contains($r['message'], 'PESAN UJI'));
+            Http::assertSent(fn ($r) => str_contains($r->url(), '/send') && $r['target'] === '6281233334444' && str_contains($r['message'], 'Pesan uji HaloDek'));
         } finally {
             $old === null ? File::delete($log) : File::put($log, $old);
         }

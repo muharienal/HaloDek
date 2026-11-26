@@ -37,7 +37,8 @@ class ReportController extends Controller
             ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('report_number', 'like', "%{$search}%")
-                ->orWhere('title', 'like', "%{$search}%")))
+                ->orWhere('title', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%")))
             ->latest()
             ->paginate(config('halodek.per_page'))
             ->withQueryString();
@@ -87,7 +88,9 @@ class ReportController extends Controller
         }
 
         return response()->json(array_map(
-            fn ($a) => ['id' => $a['id'], 'label' => $a['label'].(isset($a['location']['name']) ? ' · '.$a['location']['name'] : '')],
+            fn ($a) => ['id' => $a['id'], 'label' => $a['label']
+                .(in_array($a['holder']['type'] ?? null, ['bidang', 'divisi'], true) && $a['holder']['name'] ? ' · '.$a['holder']['name'] : '')
+                .(isset($a['location']['name']) ? ' · '.$a['location']['name'] : '')],
             $this->itemOptions($request->user(), $team, $request->integer('location_id') ?: null)
         ));
     }
@@ -104,17 +107,19 @@ class ReportController extends Controller
         $locationId = $request->integer('location_id') ?: null;
         $itemId = $request->integer('asset_id') ?: null;
 
-        if (! $category || (! $itemId && (! $locationId || $category->allow_custom))) {
+        // Barang dipilih (mis. dari pindai QR): cukup cocokkan barangnya, kategori belum perlu dipilih.
+        if (! $itemId && (! $category || ! $locationId || $category->allow_custom)) {
             return response()->json([]);
         }
 
         $me = $request->user();
-        $rows = Report::with('category')->open()->where('team_id', $teamId)
+        // Barang sama (regu mana pun) atau kategori + lokasi sama (kategori sudah menentukan regunya).
+        $rows = Report::with('category')->open()
             ->where(function ($q) use ($itemId, $category, $locationId) {
                 if ($itemId) {
                     $q->orWhere('asset_id', $itemId);
                 }
-                if ($locationId && ! $category->allow_custom) {
+                if ($category && $locationId && ! $category->allow_custom) {
                     $q->orWhere(fn ($w) => $w->where('category_id', $category->id)->where('inventory_location_id', $locationId));
                 }
             })
@@ -191,7 +196,20 @@ class ReportController extends Controller
         }
         unset($data['location_id']);
 
-        // Judul boleh dikosongkan: dibuat otomatis "Kategori – Lokasi".
+        // Barang yang sama masih punya laporan aktif: minta konfirmasi dulu agar tidak terjadi laporan ganda.
+        if (! empty($data['asset_id']) && ! $request->boolean('confirm_duplicate')) {
+            $open = Report::open()->whereNull('duplicate_of_id')->where('asset_id', $data['asset_id'])->latest()->take(3)->get();
+            if ($open->isNotEmpty()) {
+                return back()->withInput()->with('duplicates', $open->map(fn (Report $r) => [
+                    'number' => $r->report_number,
+                    'status' => $r->statusLabel(),
+                    'age' => $r->created_at->diffForHumans(),
+                    'url' => $r->user_id === $user->id ? route('employee.reports.show', $r) : $r->publicUrl(),
+                ])->all());
+            }
+        }
+
+        // Form tidak meminta judul: dibuat otomatis "Kategori - Lokasi" (isian title tetap diterima bila dikirim).
         if (blank($data['title'] ?? null)) {
             $data['title'] = $this->autoTitle($category, $data, $shortLocation);
         }
@@ -283,11 +301,11 @@ class ReportController extends Controller
     {
         $name = $category->allow_custom && filled($data['custom_category'] ?? null) ? trim($data['custom_category']) : $category->name;
 
-        return \Illuminate\Support\Str::limit($name.($location ? ' – '.$location : ''), 200, '');
+        return \Illuminate\Support\Str::limit($name.($location ? ' - '.$location : ''), 200, '');
     }
 
     /**
-     * Barang yang boleh dilaporkan (dari Inventaris): dipegang pelapor (berdasarkan NIK),
+     * Barang yang boleh dilaporkan (dari Inventaris): dipegang pelapor (berdasarkan NIK) atau bidang/divisinya,
      * milik bersama di lokasi yang dipilih (mis. AC ruang rapat), atau yang baru dipindai QR-nya.
      * Regu dipetakan ke unit Inventaris lewat slug regu = kode unit.
      *
@@ -295,6 +313,9 @@ class ReportController extends Controller
      */
     private function itemOptions(User $user, Team $team, ?int $locationId): array
     {
-        return array_values($this->inventory->assets($team->slug, $user->nik, $locationId, (int) session('qr_item') ?: null));
+        return array_values($this->inventory->assets(
+            $team->slug, $user->nik, $locationId, (int) session('qr_item') ?: null,
+            $user->bidang?->name ?? $user->department, $user->division?->name,
+        ));
     }
 }

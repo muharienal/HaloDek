@@ -20,9 +20,14 @@
     @foreach ($sections as $title => $rows)
         <section class="card">
             <div class="card-head"><h2>{{ $title }}</h2>
-                @if ($title === 'Koneksi ke aplikasi lain' && $canTestWa)
-                    <form method="POST" action="{{ route('admin.status.wa-test') }}" data-confirm="Kirim pesan uji WhatsApp ke nomor manajer (WA_TO)?">@csrf
-                        <button class="btn btn-secondary btn-sm">Kirim WA uji</button></form>
+                @if ($title === 'Koneksi ke aplikasi lain')
+                    <div class="flex gap-2" style="flex-wrap:wrap">
+                        <a class="btn btn-secondary btn-sm" href="{{ route('admin.wa.edit') }}">Atur WhatsApp</a>
+                        @if ($canTestWa)
+                            <form method="POST" action="{{ route('admin.status.wa-test') }}" data-confirm="Kirim pesan uji WhatsApp ke nomor di profil Anda?">@csrf
+                                <button class="btn btn-secondary btn-sm">Kirim WA Uji</button></form>
+                        @endif
+                    </div>
                 @endif
             </div>
             <ul class="status-list">

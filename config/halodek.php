@@ -38,6 +38,15 @@ return [
         'karyawan' => 'Karyawan',
     ],
 
+    // Penjelasan peran (bisa diubah Superadmin di Struktur Organisasi > Peran; hak aksesnya tetap).
+    'role_descriptions' => [
+        'superadmin' => 'Mengelola seluruh aplikasi: pengguna, regu, struktur organisasi, dan semua laporan.',
+        'manajer' => 'Memantau semua regu (laporan, laporan bulanan, ekspor) tanpa menangani laporan.',
+        'kepala_regu' => 'Memimpin satu regu: membagi tugas, menangani laporan, dan mengatur kategori regunya.',
+        'staf' => 'Anggota regu: mengambil dan menyelesaikan laporan regunya.',
+        'karyawan' => 'Mengajukan dan memantau laporan sendiri. Masuk cukup dengan NIK.',
+    ],
+
     // Regu bawaan (sistem). Tidak bisa dihapus / dimatikan; regu lain boleh ditambah Superadmin.
     'system_teams' => ['it', 'sarpras', 'kesekretariatan', 'keamanan'],
 

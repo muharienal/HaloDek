@@ -6,14 +6,14 @@ use App\Services\DailyDigest;
 use Illuminate\Console\Command;
 
 /**
- * Kirim ringkasan harian ke manajer (WA_TO) sekarang. Biasanya TIDAK perlu dijadwalkan:
- * aplikasi mengirimnya sendiri setelah WA_RINGKASAN_JAM saat ada yang membuka HaloDek.
+ * Kirim ringkasan harian sekarang. Biasanya TIDAK perlu dijadwalkan:
+ * aplikasi mengirimnya sendiri setelah jam ringkasan saat ada yang membuka HaloDek.
  */
 class SendDailyDigest extends Command
 {
     protected $signature = 'halodek:ringkasan-harian {--uji : Tampilkan isinya saja, tanpa mengirim}';
 
-    protected $description = 'Kirim ringkasan laporan hari ini ke WhatsApp manajer (WA_TO)';
+    protected $description = 'Kirim ringkasan laporan hari ini ke WhatsApp';
 
     public function handle(DailyDigest $digest): int
     {
@@ -33,7 +33,7 @@ class SendDailyDigest extends Command
         $sent = $digest->send(now());
         $sent > 0
             ? $this->info("Ringkasan terkirim ke {$sent} nomor.")
-            : $this->warn('Ringkasan tidak terkirim. Periksa WA_DRIVER, WA_TO, WA_TOKEN, dan log.');
+            : $this->warn('Ringkasan tidak terkirim. Periksa Administrasi › WhatsApp (status, token, penerima Ringkasan harian) dan log.');
 
         return $sent > 0 ? self::SUCCESS : self::FAILURE;
     }

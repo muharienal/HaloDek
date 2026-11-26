@@ -30,7 +30,7 @@
                     @if ($f['lewat'])Menampilkan laporan yang <strong>lewat batas respons</strong> saja.
                     @else<strong>{{ count($overdueIds) }} laporan lewat batas respons</strong> dan belum diambil.@endif
                 </div>
-                @if ($f['lewat'])<a class="btn btn-sm btn-secondary" href="{{ route('admin.reports.index', $keep(['lewat' => null])) }}">Tampilkan semua</a>
+                @if ($f['lewat'])<a class="btn btn-sm btn-secondary" href="{{ route('admin.reports.index', $keep(['lewat' => null])) }}">Tampilkan Semua</a>
                 @else<a class="btn btn-sm btn-danger" href="{{ route('admin.reports.index', $keep(['lewat' => 1, 'status' => 'aktif'])) }}">Tampilkan</a>@endif
             </div>
         </div>
@@ -45,7 +45,7 @@
                 <div class="search-trigger is-filled"><x-icon name="search" :size="16" /><button type="button" data-search-open class="search-trigger-text">“{{ \Illuminate\Support\Str::limit($f['q'], 40) }}”</button>
                     <a href="{{ route('admin.reports.index', $keep(['q' => null])) }}" class="search-clear" title="Hapus pencarian" aria-label="Hapus pencarian"><x-icon name="x" :size="14" /></a></div>
             @else
-                <button type="button" class="search-trigger" data-search-open><x-icon name="search" :size="16" /> <span>No. laporan, judul, pelapor…</span></button>
+                <button type="button" class="search-trigger" data-search-open><x-icon name="search" :size="16" /> <span>No. laporan, isi, pelapor…</span></button>
             @endif
         </div>
         @php $activeFilters = collect([$f['team_id'], $f['priority'], $f['assigned'], $f['from'], $f['to']])->filter()->count(); @endphp
@@ -63,7 +63,7 @@
         <div class="field filter-more"><label class="label" for="from">Dari</label><input class="input" type="date" id="from" name="from" value="{{ $f['from'] }}"></div>
         <div class="field filter-more"><label class="label" for="to">Sampai</label><input class="input" type="date" id="to" name="to" value="{{ $f['to'] }}"></div>
         @if (collect(request()->only(['q', 'team_id', 'priority', 'assigned', 'from', 'to']))->filter()->isNotEmpty())
-            <a class="btn btn-ghost filter-more" href="{{ route('admin.reports.index', ['status' => $f['status']]) }}">Reset filter</a>
+            <a class="btn btn-ghost filter-more" href="{{ route('admin.reports.index', ['status' => $f['status']]) }}">Reset Filter</a>
         @endif
     </form>
 
@@ -78,7 +78,7 @@
                     <tr>
                         <td class="bulk-col">@if ($r->isOpen() && auth()->user()->canAct())<input type="checkbox" class="bulk-check" name="ids[]" value="{{ $r->id }}" form="bulk-form" data-bulk-item aria-label="Pilih {{ $r->report_number }}">@endif</td>
                         <td style="max-width:280px"><a class="mono strong" href="{{ route('admin.reports.show', $r) }}">{{ $r->report_number }}</a>
-                            <div class="truncate">{{ $r->title }}</div><div class="text-xs muted">{{ $r->created_at->translatedFormat('d M Y H:i') }}</div></td>
+                            <div class="truncate">{{ $r->title }}</div><div class="truncate text-xs muted" title="{{ $r->summary(300) }}">{{ $r->summary() }}</div><div class="text-xs faint">{{ $r->created_at->translatedFormat('d M Y H:i') }}</div></td>
                         <td>{{ $r->reporter_name }}</td>
                         <td><x-team-chip :team="$r->team" /><div class="text-xs muted mt-1">{{ $r->categoryDisplayName() }}</div></td>
                         <td><x-priority :report="$r" /></td>
@@ -87,7 +87,9 @@
                             @if (in_array($r->id, $overdueIds, true))
                                 <div class="mt-1"><span class="note-flag is-red"><x-icon name="clock" :size="13" /> Lewat batas</span></div>
                             @endif
-                            @if ($r->appealed_at && $r->isOpen())
+                            @if ($r->duplicate_of_id)
+                                <div class="mt-1"><span class="note-flag is-gray"><x-icon name="swap" :size="13" /> Laporan ganda</span></div>
+                            @elseif ($r->appealed_at && $r->isOpen())
                                 <div class="mt-1"><span class="note-flag is-orange"><x-icon name="flag" :size="13" /> Banding pelapor</span></div>
                             @elseif ($r->reopened_count && $r->isOpen())
                                 <div class="mt-1"><span class="note-flag is-orange"><x-icon name="refresh" :size="13" /> Dibuka ulang</span></div>
@@ -96,7 +98,7 @@
                                 <div class="text-xs muted mt-1">{{ $r->resolved_at->diffForHumans() }}</div>
                             @endif
                         </td>
-                        <td>@if ($r->assignee)<span class="flex items-center gap-2"><span class="avatar sm">{{ $r->assignee->initials() }}</span><span class="text-sm">{{ \Illuminate\Support\Str::words($r->assignee->name, 2, '') }}</span></span>@elseif ($r->isOpen())<span class="muted text-sm">Belum ada</span>@else<span class="faint text-sm">–</span>@endif</td>
+                        <td>@if ($r->assignee)<span class="flex items-center gap-2"><span class="avatar sm">{{ $r->assignee->initials() }}</span><span class="text-sm">{{ \Illuminate\Support\Str::words($r->assignee->name, 2, '') }}</span></span>@elseif ($r->isOpen())<span class="muted text-sm">Belum ada</span>@else<span class="faint text-sm">-</span>@endif</td>
                         <td class="text-right nowrap">
                             @can('claim', $r)
 @unless ($r->assigned_to_id)
@@ -123,7 +125,7 @@
     @csrf
     <span class="strong bulk-count" id="bulk-count">0 dipilih</span>
     <select class="select" name="action" id="bulk-action" required aria-label="Aksi">
-        <option value="">— Pilih aksi —</option>
+        <option value="">- Pilih aksi -</option>
         <option value="ambil">Ambil (saya kerjakan)</option>
         @if ($canAssignAny)<option value="tugaskan">Tugaskan ke…</option>@endif
         <option value="selesai">Tandai selesai</option>
@@ -131,7 +133,7 @@
     </select>
     @if ($canAssignAny)
         <select class="select" name="assigned_to_id" id="bulk-assignee" hidden aria-label="Penanggung jawab">
-            <option value="">— Penanggung jawab —</option>
+            <option value="">- Penanggung jawab -</option>
             @foreach ($staff as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
         </select>
     @endif

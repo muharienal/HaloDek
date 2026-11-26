@@ -4,6 +4,11 @@
             <x-input name="name" label="Nama regu" required maxlength="100" placeholder="Mis. Regu K3 & Keselamatan" />
             <x-input name="code" label="Kode nomor laporan" required maxlength="6" placeholder="Mis. K3" hint="Awalan nomor laporan, mis. K3-20261117-0001." style="text-transform:uppercase" />
         </div>
+ @php $bidangOptions = \App\Models\Department::with('division')->ordered()->get(); @endphp
+        <x-select name="department_id" label="Bidang" hint="Regu berada di bawah bidang ini. Anggota regu otomatis tercatat di bidang yang sama.">
+            <option value="">- Belum diatur -</option>
+            @foreach ($bidangOptions as $b)<option value="{{ $b->id }}" @selected(old('department_id') == $b->id)>{{ $b->name }}{{ $b->division ? ' ('.$b->division->name.')' : '' }}</option>@endforeach
+        </x-select>
         <x-input name="description" label="Deskripsi singkat" maxlength="255" placeholder="Contoh: Keselamatan kerja, APAR, P3K" />
         <div class="form-grid">
             <x-select name="icon" label="Ikon" required>

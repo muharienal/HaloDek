@@ -48,7 +48,7 @@ class ReportController extends Controller
         return view('admin.reports.index', compact('reports', 'filters', 'statusCounts', 'teams', 'staff', 'overdueIds'));
     }
 
-    public function show(Report $report): View
+    public function show(Request $request, Report $report): View
     {
         $this->authorize('view', $report);
 
@@ -68,9 +68,17 @@ class ReportController extends Controller
             ? Report::where('asset_id', $report->asset_id)->where('id', '!=', $report->id)->latest()->take(5)->get(['id', 'report_number', 'title', 'status', 'created_at'])
             : collect();
 
-        $assetUrl = $report->asset_id ? app(\App\Services\InventoryClient::class)->assetWebUrl($report->asset_id) : null;
+        // Calon laporan utama untuk "Gabungkan": masih terbuka, barang sama atau regu sama, bukan laporan ganda.
+        $mergeTargets = $report->isOpen() && $request->user()->can('manage', $report)
+            ? Report::open()->whereNull('duplicate_of_id')->where('id', '!=', $report->id)
+                ->where(fn ($q) => $q->where('team_id', $report->team_id)->when($report->asset_id, fn ($w) => $w->orWhere('asset_id', $report->asset_id)))
+                ->orderByRaw('CASE WHEN asset_id = ? THEN 0 ELSE 1 END', [(int) $report->asset_id])->latest()->take(30)
+                ->get(['id', 'report_number', 'title', 'description', 'asset_id', 'created_at'])
+            : collect();
 
-        return view('admin.reports.show', compact('report', 'activities', 'staff', 'otherTeams', 'history', 'assetUrl'));
+        $assetUrl = $report->asset_id ? app(\App\Services\InventoryClient::class)->assetLink($report->asset_id) : null;
+
+        return view('admin.reports.show', compact('report', 'activities', 'staff', 'otherTeams', 'history', 'assetUrl', 'mergeTargets'));
     }
 
     public function update(Request $request, Report $report): RedirectResponse
@@ -231,6 +239,22 @@ class ReportController extends Controller
         $this->reports->release($report, $request->user(), $data['reason'] ?? null);
 
         return back()->with('success', 'Laporan dilepas dan kembali menunggu diambil.');
+    }
+
+    /** Tutup laporan ganda: digabung ke laporan utama yang sedang ditangani. */
+    public function merge(Request $request, Report $report): RedirectResponse
+    {
+        $this->authorize('manage', $report);
+        $data = $request->validate(['master_id' => ['required', 'integer']], ['master_id.required' => 'Pilih laporan utama.']);
+
+        $master = Report::find($data['master_id']);
+        if (! $master || ! $request->user()->handlesTeam($master->team_id)) {
+            return back()->withErrors(['master_id' => 'Laporan utama tidak ditemukan atau bukan regu Anda.']);
+        }
+
+        $this->reports->markDuplicate($report, $request->user(), $master);
+
+        return redirect()->route('admin.reports.show', $master)->with('success', "Laporan {$report->report_number} digabung ke laporan ini.");
     }
 
     public function transfer(Request $request, Report $report): RedirectResponse
@@ -397,6 +421,7 @@ class ReportController extends Controller
             ->when($f['q'] !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('report_number', 'like', "%{$f['q']}%")
                 ->orWhere('reporter_name', 'like', "%{$f['q']}%")
-                ->orWhere('title', 'like', "%{$f['q']}%")));
+                ->orWhere('title', 'like', "%{$f['q']}%")
+                ->orWhere('description', 'like', "%{$f['q']}%")));
     }
 }

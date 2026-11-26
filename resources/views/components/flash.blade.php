@@ -4,7 +4,7 @@
     <div class="alert alert-warning" role="alert"><x-icon name="key" :size="18" /><div>
         <strong>Password sementara untuk {{ $tp['name'] }} (NIK {{ $tp['nik'] }}):</strong>
         <div class="mono" style="font-size:18px;margin:6px 0;user-select:all">{{ $tp['password'] }}</div>
-        <span class="text-sm">Catat dan sampaikan secara langsung sekarang — password ini tidak akan ditampilkan lagi. Pengguna wajib menggantinya saat login pertama.</span></div></div>
+        <span class="text-sm">Catat dan sampaikan secara langsung sekarang - password ini tidak akan ditampilkan lagi. Pengguna wajib menggantinya saat login pertama.</span></div></div>
 @endif
 @if (session('importErrors'))
     <div class="alert alert-warning"><div><strong>Baris yang dilewati:</strong>

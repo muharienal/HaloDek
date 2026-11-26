@@ -32,7 +32,7 @@ class MonthlyReportTest extends TestCase
     public function test_page_numbers_are_correct_and_scoped_per_team(): void
     {
         $this->seedTeams();
-        // Senin pertama bulan ini 07:00. Jam kerja Sen–Jum 07–16.
+        // Senin pertama bulan ini 07:00. Jam kerja Sen-Jum 07-16.
         $m = now()->startOfMonth()->modify('first monday of this month')->setTime(7, 0);
         $this->make('it', 'selesai', $m, $m->copy()->setTime(10, 0), $m->copy()->addHours(2));           // 3 jam kerja
         $this->make('it', 'selesai', $m, $m->copy()->addDay()->setTime(10, 0), $m->copy()->addHours(4)); // 9 + 3 = 12 jam kerja (bukan 27 jam kalender)
@@ -50,7 +50,7 @@ class MonthlyReportTest extends TestCase
         $this->assertSame(3.0, $d['avg_respond']);    // (2 + 4) / 2
         $this->assertSame(50, $d['done_pct']);
 
-        $this->actingAs($super)->get(route('admin.monthly.index', ['bulan' => $m->format('Y-m')]))->assertOk()->assertSee('7.5 jam', false);
+        $this->actingAs($super)->get(route('admin.monthly.index', ['bulan' => $m->format('Y-m')]))->assertOk()->assertSee('7,5 jam kerja', false);
 
         // Staf regu Keamanan hanya melihat regunya sendiri.
         $staf = $this->user(User::ROLE_STAF, 'keamanan');

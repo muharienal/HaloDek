@@ -24,29 +24,37 @@ class WhatsAppTest extends TestCase
     public function test_fonnte_sends_only_on_new_report_with_link(): void
     {
         $this->seedTeams();
-        config(['services.whatsapp' => ['driver' => 'fonnte', 'to' => '62811111', 'token' => 'tok', 'secret' => '', 'wablas_url' => 'https://x.test', 'timeout' => 5, 'manager_mode' => 'setiap']]);
+        $this->user(\App\Models\User::ROLE_MANAJER, null, ['phone' => '081211112222']);
+        config(['services.whatsapp' => ['driver' => 'fonnte', 'token' => 'tok', 'timeout' => 5, 'manager_mode' => 'setiap']]);
         Http::fake(['api.fonnte.com/*' => Http::response(['status' => true])]);
 
         $this->submit();
 
         Http::assertSent(fn ($r) => $r->url() === 'https://api.fonnte.com/send'
             && $r->hasHeader('Authorization', 'tok')
-            && $r['target'] === '62811111'
+            && $r['target'] === '6281211112222'
             && str_contains($r['message'], 'PRINTER RUSAK')
-            && str_contains($r['message'], '/p/'));
+            && str_contains($r['message'], '/admin/laporan/'));
         Http::assertSentCount(1);
     }
 
-    public function test_wablas_driver_and_failure_does_not_break_report(): void
+    public function test_fonnte_failure_does_not_break_report_and_no_token_means_off(): void
     {
         $this->seedTeams();
-        config(['services.whatsapp' => ['driver' => 'wablas', 'to' => '62811111', 'token' => 'tok', 'secret' => 'sec', 'wablas_url' => 'https://w.test', 'timeout' => 5, 'manager_mode' => 'setiap']]);
-        Http::fake(['w.test/*' => Http::response('err', 500)]);
+        $this->user(\App\Models\User::ROLE_MANAJER, null, ['phone' => '081211112222']);
+        config(['services.whatsapp' => ['driver' => 'fonnte', 'token' => 'tok', 'timeout' => 5, 'manager_mode' => 'setiap']]);
+        Http::fake(['api.fonnte.com/*' => Http::response('err', 500)]);
 
         $this->submit();
 
-        Http::assertSent(fn ($r) => $r->url() === 'https://w.test/api/send-message' && $r->hasHeader('Authorization', 'tok.sec'));
+        Http::assertSent(fn ($r) => $r->url() === 'https://api.fonnte.com/send' && $r->hasHeader('Authorization', 'tok'));
         $this->assertDatabaseCount('reports', 1);
+
+        // Token kosong: tidak mencoba mengirim sama sekali.
+        config(['services.whatsapp.token' => '']);
+        Http::fake(['api.fonnte.com/*' => Http::response(['status' => true])]);
+        $this->submit();
+        Http::assertNothingSent();
     }
 
     public function test_public_link_is_short_readonly_and_hides_sensitive_data(): void
@@ -87,9 +95,22 @@ class WhatsAppTest extends TestCase
         $this->get(route('reports.public.photo', ['report' => $other->id, 'token' => $other->publicToken(), 'attachment' => $att->id]))->assertNotFound();
     }
 
+    protected function tearDown(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow();
+        parent::tearDown();
+    }
+
     private function waConfig(array $extra = []): void
     {
-        config(['services.whatsapp' => $extra + ['driver' => 'fonnte', 'to' => '62811111', 'token' => 'tok', 'secret' => '', 'wablas_url' => 'https://x.test',
+        // Jam tetap sebelum jam ringkasan harian, agar ringkasan tidak ikut terkirim saat tes dijalankan sore hari.
+        if (! \Illuminate\Support\Carbon::hasTestNow()) {
+            \Illuminate\Support\Carbon::setTestNow('2026-11-16 10:00');
+        }
+        if (! \App\Models\User::where('role', \App\Models\User::ROLE_MANAJER)->exists()) {
+            $this->user(\App\Models\User::ROLE_MANAJER, null, ['phone' => '081211112222']);
+        }
+        config(['services.whatsapp' => $extra + ['driver' => 'fonnte', 'token' => 'tok', 
             'timeout' => 5, 'manager_mode' => 'harian', 'digest_at' => '16:00', 'head_priorities' => ['tinggi', 'mendesak']]]);
         Http::fake(['api.fonnte.com/*' => Http::response(['status' => true])]);
     }
@@ -121,11 +142,11 @@ class WhatsAppTest extends TestCase
         Http::assertSent(fn ($r) => $r['target'] === '6281299990000' && str_contains($r['message'], 'LAPORAN MENDESAK MASUK') && str_contains($r['message'], '/admin/laporan/'));
         Http::assertSentCount(1);
 
-        // Kepala Regu belum mengisi nomor: dikirim ke WA_TO agar tidak hilang.
+        // Kepala Regu belum mengisi nomor: dikirim ke Manajer agar tidak hilang.
         $head->update(['phone' => null]);
         $this->waConfig();
         $this->submitWith('tinggi');
-        Http::assertSent(fn ($r) => $r['target'] === '62811111' && str_contains($r['message'], 'LAPORAN TINGGI MASUK'));
+        Http::assertSent(fn ($r) => $r['target'] === '6281211112222' && str_contains($r['message'], 'LAPORAN TINGGI MASUK'));
     }
 
     public function test_daily_digest_sent_once_after_set_time_on_workday(): void
@@ -141,7 +162,7 @@ class WhatsAppTest extends TestCase
 
         \Illuminate\Support\Carbon::setTestNow('2026-11-16 16:05');
         $this->actingAs($this->user())->get(route('dashboard'));
-        Http::assertSent(fn ($r) => $r['target'] === '62811111' && str_contains($r['message'], 'RINGKASAN HALODEK')
+        Http::assertSent(fn ($r) => $r['target'] === '6281211112222' && str_contains($r['message'], 'Ringkasan HaloDek')
             && str_contains($r['message'], 'Laporan baru: 2') && str_contains($r['message'], 'Server mati'));
 
         // Tidak dikirim dua kali di hari yang sama.

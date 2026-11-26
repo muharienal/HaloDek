@@ -27,7 +27,7 @@ class TeamController extends Controller
 
         $teams = Team::query()
             ->when(! $user->isSuperadmin(), fn ($q) => $q->whereIn('id', $user->handledTeamIds() ?: [0]))
-            ->with('head')
+            ->with(['head', 'department.division'])
             ->withCount([
                 'users', 'categories', 'reports',
                 'reports as open_reports_count' => fn ($q) => $q->whereIn('status', ['menunggu', 'diproses']),
@@ -42,7 +42,7 @@ class TeamController extends Controller
     {
         $this->authorizeTeam($team->id);
 
-        $team->load(['categories' => fn ($q) => $q->withCount('reports')]);
+        $team->load(['categories' => fn ($q) => $q->withCount('reports'), 'department']);
 
         // Kepala Regu tampil lebih dulu, lalu Staf; beban kerja = laporan aktif yang ia pegang.
         $members = $team->users()
@@ -97,6 +97,10 @@ class TeamController extends Controller
         }
 
         $team->update($data);
+        // Anggota regu ikut tercatat di bidang (dan divisi) regunya.
+        if ($team->wasChanged('department_id') && $team->department_id) {
+            $team->users()->whereIn('role', User::TEAM_ROLES)->get()->each(fn (User $u) => $u->update(['department_id' => $team->department_id]));
+        }
         Audit::log('team.update', "Mengubah regu {$team->name}.", $team);
 
         return back()->with('success', 'Regu berhasil diperbarui.');
@@ -143,7 +147,7 @@ class TeamController extends Controller
         }
 
         $temp = null;
-        $attrs = ['role' => $data['role'], 'team_id' => $team->id];
+        $attrs = ['role' => $data['role'], 'team_id' => $team->id] + ($team->department_id ? ['department_id' => $team->department_id] : []);
         if ($user->isKaryawan()) {
             // Karyawan yang dinaikkan jadi pengelola wajib punya password: buat sementara & acak.
             $temp = User::temporaryPassword();
@@ -212,6 +216,7 @@ class TeamController extends Controller
             'name' => ['required', 'string', 'max:100', Rule::unique('teams', 'name')->ignore($team?->id)],
             'code' => ['required', 'string', 'min:2', 'max:6', 'alpha_num', Rule::unique('teams', 'code')->ignore($team?->id)],
             'description' => ['nullable', 'string', 'max:255'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'icon' => ['required', Rule::in(config('halodek.team_icons'))],
             'color' => ['required', Rule::in(array_keys(config('halodek.team_colors')))],
             'is_active' => ['nullable', 'boolean'],
@@ -224,6 +229,7 @@ class TeamController extends Controller
         ]);
 
         $data['code'] = Str::upper($data['code']);
+        $data['department_id'] = ($data['department_id'] ?? null) ?: null;
         $data['is_active'] = $request->boolean('is_active', true);
 
         return $data;

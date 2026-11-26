@@ -77,12 +77,12 @@ class InventoryClient
     }
 
     /**
-     * Aset yang boleh dilaporkan oleh pelapor: dipegang NIK-nya, milik bersama di lokasi yang dipilih,
+     * Aset yang boleh dilaporkan oleh pelapor: dipegang NIK-nya atau bidang/divisinya, milik bersama di lokasi yang dipilih,
      * atau aset yang baru dipindai QR-nya.
      *
      * @return array<int, array<string, mixed>>
      */
-    public function assets(string $unit, ?string $holderNik, ?int $locationId, ?int $includeId = null): array
+    public function assets(string $unit, ?string $holderNik, ?int $locationId, ?int $includeId = null, ?string $department = null, ?string $division = null): array
     {
         if (! $this->enabled() || $unit === '') {
             return [];
@@ -91,11 +91,34 @@ class InventoryClient
         $rows = $this->get('assets', array_filter([
             'unit' => $unit,
             'holder_nik' => $holderNik,
+            // Barang milik bidang / divisi pelapor juga boleh dilaporkan.
+            'holder_department' => $department,
+            'holder_division' => $division,
             'location_id' => $locationId,
             'include_id' => $includeId,
         ])) ?? [];
 
         return array_values(array_filter(array_map(fn ($a) => self::cleanAsset($a), $rows)));
+    }
+
+    /**
+     * Tautan barang untuk petugas HaloDek: halaman cek aset publik (tanpa login Inventaris).
+     * Disimpan 6 jam; bila Inventaris tidak menjawab, dicoba lagi 10 menit kemudian
+     * dan sementara memakai halaman aset biasa.
+     */
+    public function assetLink(int $id): ?string
+    {
+        if (! $this->enabled()) {
+            return null;
+        }
+        $key = 'inventaris:cek-aset:'.$id;
+        $url = \Illuminate\Support\Facades\Cache::get($key);
+        if ($url === null) {
+            $url = $this->asset($id)['check_url'] ?? '';
+            \Illuminate\Support\Facades\Cache::put($key, $url, $url !== '' ? now()->addHours(6) : now()->addMinutes(10));
+        }
+
+        return $url !== '' ? $url : $this->assetWebUrl($id);
     }
 
     /** @return array<string, mixed>|null */
@@ -136,14 +159,19 @@ class InventoryClient
             'id' => (int) $a['id'],
             'code' => $code,
             'name' => $name,
-            'label' => $str($a['label'] ?? null, 300) ?? $code.' – '.$name,
+            'label' => $str($a['label'] ?? null, 300) ?? $code.' - '.$name,
             'unit' => $str($a['unit'] ?? null, 60),
             'category' => $str($a['category'] ?? null, 150),
             'status' => $str($a['status'] ?? null, 30),
             'active' => (bool) ($a['active'] ?? false),
             'location' => self::cleanLocation($a['location'] ?? null),
-            'holder' => is_array($a['holder'] ?? null) ? ['nik' => $str($a['holder']['nik'] ?? null, 40), 'name' => $str($a['holder']['name'] ?? null, 150)] : null,
+            // type: orang | bidang | divisi (Inventaris lama tanpa "type" = orang).
+            'holder' => is_array($a['holder'] ?? null) ? [
+                'type' => in_array($a['holder']['type'] ?? 'orang', ['orang', 'bidang', 'divisi'], true) ? ($a['holder']['type'] ?? 'orang') : 'orang',
+                'nik' => $str($a['holder']['nik'] ?? null, 40), 'name' => $str($a['holder']['name'] ?? null, 150),
+            ] : null,
             'url' => $str($a['url'] ?? null, 500),
+            'check_url' => $str($a['check_url'] ?? null, 500),
         ];
     }
 
@@ -164,10 +192,18 @@ class InventoryClient
                 'asset_id' => $report->asset_id,
                 'title' => $report->title,
                 'status' => $report->status,
-                'status_label' => $report->statusLabel(),
+                'status_label' => $report->duplicate_of_id ? 'Digabung' : $report->statusLabel(),
                 'reporter_name' => $report->user?->name,
                 'url' => route('admin.reports.show', $report),
                 'reported_at' => $report->created_at?->toIso8601String(),
+                // Detail penanganan -> riwayat perbaikan aset di Inventaris (tanpa input ulang).
+                'team' => $report->team?->name,
+                'category' => mb_substr((string) $report->categoryDisplayName(), 0, 150) ?: null,
+                'description' => mb_substr((string) $report->description, 0, 2000) ?: null,
+                'handler_name' => $report->assignee?->name,
+                'resolution' => in_array($report->status, ['selesai', 'ditolak', 'dibatalkan'], true) && $report->follow_up_note
+                    ? mb_substr($report->follow_up_note, 0, 2000) : null,
+                'resolved_at' => $report->status === 'selesai' ? $report->resolved_at?->toIso8601String() : null,
             ]);
 
             if (! $response->successful()) {
@@ -196,7 +232,7 @@ class InventoryClient
                 return;
             }
             $sent = true;
-            if ($r = Report::with('user')->find($id)) {
+            if ($r = Report::with(['user', 'team', 'assignee', 'category'])->find($id)) {
                 app(self::class)->pushReport($r);
             }
         });

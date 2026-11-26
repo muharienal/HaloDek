@@ -38,7 +38,7 @@ class User extends Authenticatable
     public const TEAM_ROLES = [self::ROLE_KEPALA_REGU, self::ROLE_STAF];
 
     protected $fillable = [
-        'nik', 'name', 'phone', 'department', 'position',
+        'nik', 'name', 'phone', 'wa_off', 'department', 'position', 'division_id', 'department_id', 'position_id',
         'role', 'team_id', 'password', 'must_change_password', 'is_active', 'last_login_at',
     ];
 
@@ -49,9 +49,10 @@ class User extends Authenticatable
         'must_change_password' => 'boolean',
         'is_active' => 'boolean',
         'last_login_at' => 'datetime',
+        'wa_off' => 'array',
     ];
 
-    /** Nomor HP otomatis disimpan dalam format 62xxxxxxxxxx (siap dipakai Fonnte/Wablas). */
+    /** Nomor HP otomatis disimpan dalam format 62xxxxxxxxxx (siap dipakai Fonnte). */
     protected function phone(): Attribute
     {
         return Attribute::make(
@@ -65,6 +66,14 @@ class User extends Authenticatable
         return Phone::normalize($this->phone);
     }
 
+    /** Pengguna ini mau menerima kabar WhatsApp jenis ini (aturan peran + pilihan pribadinya)? */
+    public function wantsWa(string $event, ?string $priority = null): bool
+    {
+        return $this->is_active
+            && \App\Support\WaRules::roleWants((string) $this->role, $event, $priority)
+            && ! in_array($event, (array) ($this->wa_off ?? []), true);
+    }
+
     /** Cache per-instance untuk daftar ID regu yang ditangani. */
     private ?array $handledTeamIds = null;
 
@@ -74,6 +83,46 @@ class User extends Authenticatable
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    public function division(): BelongsTo
+    {
+        return $this->belongsTo(Division::class);
+    }
+
+    /** Bidang. (Nama kolom teks lamanya "department" tetap dipakai sebagai salinan nama.) */
+    public function bidang(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'department_id');
+    }
+
+    public function jabatan(): BelongsTo
+    {
+        return $this->belongsTo(Position::class, 'position_id');
+    }
+
+    /** "Divisi › Bidang" untuk tampilan ringkas. */
+    public function orgPath(): string
+    {
+        return collect([$this->division?->name, $this->bidang?->name ?? $this->department])->filter()->unique()->implode(' › ');
+    }
+
+    protected static function booted(): void
+    {
+        // Pilihan struktur organisasi -> salinan nama teks (dipakai tampilan, ekspor, API Inventaris).
+        // Bidang menentukan divisinya, agar keduanya tidak pernah bertentangan.
+        static::saving(function (User $u) {
+            if ($u->isDirty('department_id')) {
+                $b = $u->department_id ? Department::find($u->department_id) : null;
+                $u->department = $b?->name;
+                if ($b?->division_id) {
+                    $u->division_id = $b->division_id;
+                }
+            }
+            if ($u->isDirty('position_id')) {
+                $u->position = $u->position_id ? Position::whereKey($u->position_id)->value('name') : null;
+            }
+        });
     }
 
     public function reports(): HasMany

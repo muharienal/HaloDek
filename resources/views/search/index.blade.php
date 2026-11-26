@@ -8,7 +8,7 @@
         <form method="GET" action="{{ route('search') }}" class="card-body flex gap-3 items-end" role="search">
             <div class="field grow">
                 <label class="label" for="q-main">Kata kunci</label>
-                <input class="input" id="q-main" type="search" name="q" value="{{ $q }}" maxlength="60" placeholder="{{ $isAdmin ? 'No. laporan, judul, nama atau NIK pelapor' : 'No. laporan atau judul' }}" autocomplete="off">
+                <input class="input" id="q-main" type="search" name="q" value="{{ $q }}" maxlength="60" placeholder="{{ $isAdmin ? 'No. laporan, isi, nama atau NIK pelapor' : 'No. laporan atau isi laporan' }}" autocomplete="off">
             </div>
             <button class="btn btn-primary"><x-icon name="search" :size="16" /> Cari</button>
         </form>
@@ -29,7 +29,7 @@
                         @foreach ($reports as $r)
                             @php $href = $isAdmin ? route('admin.reports.show', $r) : route('employee.reports.show', $r); @endphp
                             <tr>
-                                <td><a class="mono strong" href="{{ $href }}">{{ $r->report_number }}</a><div class="truncate text-sm" style="max-width:360px">{{ $r->title }}</div></td>
+                                <td><a class="mono strong" href="{{ $href }}">{{ $r->report_number }}</a><div class="truncate text-sm" style="max-width:360px">{{ $r->title }}</div><div class="truncate text-xs muted" style="max-width:360px">{{ $r->summary() }}</div></td>
                                 @if ($isAdmin)<td>{{ $r->reporter_name }}</td>@endif
                                 <td><x-team-chip :team="$r->team" /></td>
                                 <td><x-badge :tone="$r->statusTone()">{{ $r->statusLabel() }}</x-badge></td>

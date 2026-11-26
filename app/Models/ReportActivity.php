@@ -38,6 +38,7 @@ class ReportActivity extends Model
             'confirmed' => 'check-circle',
             'reopened' => 'refresh',
             'appealed' => 'flag',
+            'merged' => 'swap',
             default => 'dot',
         };
     }

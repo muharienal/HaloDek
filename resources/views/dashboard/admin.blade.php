@@ -21,7 +21,7 @@
         ['value' => $stats['unassigned'], 'label' => 'Menunggu Diambil', 'href' => route('admin.reports.index', ['assigned' => 'none', 'status' => 'aktif']), 'warn' => $stats['unassigned'] > 0],
         ['value' => $stats['mine'], 'label' => 'Tugas Saya', 'href' => route('admin.reports.index', ['assigned' => 'me', 'status' => 'aktif'])],
         ['value' => $stats['diproses'], 'label' => 'Sedang Diproses', 'href' => route('admin.reports.index', ['status' => 'diproses'])],
-        ['value' => $stats['avg_hours'] !== null ? $stats['avg_hours'].' jam' : '–', 'label' => 'Rata-rata Selesai', 'href' => route('admin.monthly.index')],
+        ['value' => \App\Support\Num::workHours($stats['avg_hours']), 'label' => 'Rata-rata Selesai (90 hari)', 'href' => route('admin.monthly.index')],
     ]])
 
     {{-- ===== SATU TABEL: yang perlu ditangani sekarang ===== --}}
@@ -37,7 +37,7 @@
                     @foreach ($todo as $r)
                         <tr>
                             <td><a class="mono strong" href="{{ route('admin.reports.show', $r) }}">{{ $r->report_number }}</a> <span class="text-xs muted">· {{ $r->created_at->diffForHumans() }}</span>
-                                <div class="truncate text-sm" style="max-width:360px">{{ $r->title }}</div></td>
+                                <div class="truncate text-sm" style="max-width:360px">{{ $r->title }}</div><div class="truncate text-xs muted" style="max-width:360px">{{ $r->summary() }}</div></td>
                             <td><x-team-chip :team="$r->team" /></td>
                             <td><x-priority :report="$r" /></td>
                             <td>

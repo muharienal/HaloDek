@@ -8,7 +8,7 @@ use Illuminate\Http\UploadedFile;
 
 /**
  * Lampiran disimpan di disk privat (storage/app/lampiran) dan hanya bisa
- * diakses lewat route yang dicek hak aksesnya — tidak perlu storage:link.
+ * diakses lewat route yang dicek hak aksesnya - tidak perlu storage:link.
  */
 class AttachmentService
 {

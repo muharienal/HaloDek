@@ -100,7 +100,7 @@ class QrScanTest extends TestCase
         $this->assertSame('AST-0100', $r->asset_code);
         $this->assertSame('Lenovo ThinkPad', $r->asset_name);
         $this->assertSame('Ruang Rapat A (Gedung A, Lt. 2)', $r->location_name);
-        $this->assertSame('Komputer & Laptop – Ruang Rapat A', $r->title);
+        $this->assertSame('Komputer & Laptop - Ruang Rapat A', $r->title);
         $this->assertNull(session('qr_item'));
 
         // Snapshot tampil walau Inventaris mati.
@@ -122,12 +122,32 @@ class QrScanTest extends TestCase
         $this->actingAs($this->head)->post(route('admin.reports.take', $r))->assertRedirect();
         $this->assertCount(2, $this->events);
         $this->assertSame('diproses', $this->events[1]['status']);
+        $this->assertSame($this->head->name, $this->events[1]['handler_name']);
+        $this->assertSame('IT', $this->events[1]['team']);
+        $this->assertNull($this->events[1]['resolution']);
+
+        // Selesai: catatan penyelesaian & waktunya ikut terkirim -> riwayat perbaikan di Inventaris.
+        $this->actingAs($this->head)->post(route('admin.reports.close', $r), ['status' => 'selesai', 'close_note' => 'Keyboard diganti baru'])->assertRedirect();
+        $last = $this->events[count($this->events) - 1];
+        $this->assertSame(['selesai', 'Keyboard diganti baru'], [$last['status'], $last['resolution']]);
+        $this->assertNotNull($last['resolved_at']);
+        $sentBefore = count($this->events);
 
         // Laporan tanpa barang tidak dikirim.
         $this->actingAs($this->emp)->post(route('employee.reports.store'), [
             'team_id' => $this->it->id, 'category_id' => $this->komputer(), 'priority' => 'sedang', 'title' => 'Tanpa barang', 'description' => 'x',
         ]);
-        $this->assertCount(2, $this->events);
+        $this->assertCount($sentBefore, $this->events);
+    }
+
+    public function test_resend_command_pushes_all_asset_reports(): void
+    {
+        $this->actingAs($this->emp)->post(route('employee.reports.store'), [
+            'team_id' => $this->it->id, 'category_id' => $this->komputer(), 'asset_id' => 101, 'priority' => 'sedang', 'description' => 'x',
+        ]);
+        $before = count($this->events);
+        $this->artisan('halodek:kirim-ulang-inventaris')->expectsOutputToContain('Terkirim: 1')->assertSuccessful();
+        $this->assertCount($before + 1, $this->events);
     }
 
     public function test_without_scanning_other_peoples_item_is_still_refused(): void

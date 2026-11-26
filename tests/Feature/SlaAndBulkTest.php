@@ -66,7 +66,7 @@ class SlaAndBulkTest extends TestCase
         $this->assertSame('2026-11-23 09:00', WorkHours::addHours(Carbon::parse('2026-11-20 14:00'), 4)->format('Y-m-d H:i'));
         // Dibuat malam -> batas dihitung dari 07:00 esok hari
         $this->assertSame('2026-11-17 08:00', WorkHours::addHours(Carbon::parse('2026-11-16 20:00'), 1)->format('Y-m-d H:i'));
-        $this->assertSame('Sen–Jum 07.00–16.00', WorkHours::label());
+        $this->assertSame('Sen-Jum 07.00-16.00', WorkHours::label());
     }
 
     public function test_holidays_from_config_are_skipped(): void
@@ -101,7 +101,7 @@ class SlaAndBulkTest extends TestCase
         Carbon::setTestNow('2026-11-16 09:30');
         $this->assertTrue($r->fresh()->isOverdue());
         $this->actingAs($this->head)->get(route('dashboard'))->assertSee('1 laporan lewat batas respons')->assertSee('Lewat batas');
-        $this->actingAs($this->head)->get(route('admin.reports.index', ['lewat' => 1]))->assertSee($r->report_number)->assertSee('Tampilkan semua');
+        $this->actingAs($this->head)->get(route('admin.reports.index', ['lewat' => 1]))->assertSee($r->report_number)->assertSee('Tampilkan Semua');
         $this->actingAs($this->head)->get(route('admin.reports.show', $r))->assertSee('Batas respons')->assertSee('Lewat batas');
 
         // Setelah diambil, tidak lagi lewat batas.
@@ -111,7 +111,7 @@ class SlaAndBulkTest extends TestCase
 
     public function test_reminder_command_sends_once_to_head_whatsapp(): void
     {
-        config(['services.whatsapp.driver' => 'fonnte', 'services.whatsapp.token' => 'tkn', 'services.whatsapp.to' => '628111']);
+        config(['services.whatsapp.driver' => 'fonnte', 'services.whatsapp.token' => 'tkn']);
         Http::fake(['*' => Http::response(['status' => true])]);
         $this->head->update(['phone' => '0812-3456-7000']);
 
@@ -135,9 +135,10 @@ class SlaAndBulkTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_reminder_falls_back_to_wa_to_and_is_quiet_outside_work_hours(): void
+    public function test_reminder_falls_back_to_manager_and_is_quiet_outside_work_hours(): void
     {
-        config(['services.whatsapp.driver' => 'fonnte', 'services.whatsapp.token' => 'tkn', 'services.whatsapp.to' => '0811 2222 3333']);
+        config(['services.whatsapp.driver' => 'fonnte', 'services.whatsapp.token' => 'tkn']);
+        $this->user(User::ROLE_MANAJER, null, ['phone' => '0811 2222 3333']);
         Carbon::setTestNow('2026-11-16 08:00');
         $this->submit(['priority' => 'mendesak']);
 
@@ -153,7 +154,7 @@ class SlaAndBulkTest extends TestCase
 
     public function test_reminder_runs_by_itself_when_someone_opens_the_app(): void
     {
-        config(['services.whatsapp.driver' => 'fonnte', 'services.whatsapp.token' => 'tkn', 'services.whatsapp.to' => '']); // hanya ke Kepala Regu
+        config(['services.whatsapp.driver' => 'fonnte', 'services.whatsapp.token' => 'tkn']); // hanya ke Kepala Regu
         $this->head->update(['phone' => '081234567000']);
         Carbon::setTestNow('2026-11-16 08:00');
         $r = $this->submit(['priority' => 'mendesak']);

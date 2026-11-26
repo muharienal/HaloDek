@@ -71,7 +71,7 @@ class RobustnessTest extends TestCase
 
         $assets = $inv->assets('it', '1', null);
         $this->assertSame([9], array_column($assets, 'id'));
-        $this->assertSame('AST-9 – Laptop', $assets[0]['label']);
+        $this->assertSame('AST-9 - Laptop', $assets[0]['label']);
 
         $one = $inv->asset(7);
         $this->assertSame('#7', $one['code']);

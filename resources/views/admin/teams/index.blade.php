@@ -1,42 +1,64 @@
 @extends('layouts.app')
 @section('title', auth()->user()->isSuperadmin() ? 'Regu & Kategori' : 'Regu Saya')
-@section('subtitle', 'Regu penerima laporan, anggota, dan kategori layanannya')
 
 @section('content')
-@php $isSuper = auth()->user()->isSuperadmin(); @endphp
+@php
+    $isSuper = auth()->user()->isSuperadmin();
+    // Dikelompokkan per Bidang (Struktur Organisasi). Regu tanpa bidang di kelompok terakhir.
+    $groups = $teams->groupBy(fn ($t) => $t->department_id ?? 0)->sortBy(fn ($g, $k) => $k === 0 ? PHP_INT_MAX : ($g->first()->department->sort_order ?? 0));
+    $grouped = $teams->contains(fn ($t) => $t->department_id);
+@endphp
 
-@if ($isSuper)
-    <div class="alert alert-info">
-        <x-icon name="question" :size="18" />
-        <div><strong>Butuh bidang lain?</strong> Tambahkan regu baru. Regu langsung muncul sebagai tujuan laporan bagi karyawan, dengan Kepala Regu, staf, dan kategori layanannya sendiri.</div>
-    </div>
-    <div class="flex justify-end mb-4"><button class="btn btn-primary" data-modal-open="team-modal"><x-icon name="plus" :size="16" /> Tambah Regu</button></div>
-@endif
-
-<div class="grid cols-3">
-    @forelse ($teams as $team)
-        <a href="{{ route('admin.teams.show', $team) }}" class="card" style="padding:20px;color:inherit;text-decoration:none;{{ $team->is_active ? '' : 'opacity:.6' }}">
-            <div class="flex items-start gap-3">
-                <span class="avatar" style="width:46px;height:46px;border-radius:12px;background: {{ $team->hex() }}"><x-icon :name="$team->icon" :size="22" /></span>
-                <div class="grow">
-                    <div class="flex items-center gap-2 wrap"><span class="strong text-lg">{{ $team->name }}</span>
-                        <span class="badge tone-gray plain mono">{{ $team->code }}</span>
-                        @unless ($team->is_active)<span class="badge tone-red plain">Nonaktif</span>@endunless</div>
-                    <p class="text-sm muted mt-1">{{ $team->description ?: 'Tanpa deskripsi' }}</p>
-                </div>
-            </div>
-            <div class="grid cols-4 mt-4" style="gap:8px;text-align:center">
-                <div><div class="bold text-lg">{{ $team->open_reports_count }}</div><div class="text-xs muted">Aktif</div></div>
-                <div><div class="bold text-lg">{{ $team->reports_count }}</div><div class="text-xs muted">Laporan</div></div>
-                <div><div class="bold text-lg">{{ $team->users_count }}</div><div class="text-xs muted">Anggota</div></div>
-                <div><div class="bold text-lg">{{ $team->categories_count }}</div><div class="text-xs muted">Kategori</div></div>
-            </div>
-            <div class="text-xs muted mt-3">Kepala: {{ $team->head?->name ?? 'belum ditetapkan' }}</div>
-        </a>
-    @empty
-        <div class="card col-span-2" style="grid-column:1/-1"><x-empty icon="users" title="Belum ada regu">Anda belum tergabung di regu mana pun.</x-empty></div>
-    @endforelse
+<div class="list-toolbar">
+    <p class="muted text-sm" style="margin:0">{{ $isSuper ? 'Pilih regu untuk mengatur anggota, kategori layanan, dan template catatan.' : 'Regu yang Anda tangani.' }}</p>
+    @if ($isSuper)<button class="btn btn-primary" data-modal-open="team-modal"><x-icon name="plus" :size="16" /> Tambah Regu</button>@endif
 </div>
+
+@forelse ($groups as $key => $group)
+    @if ($grouped)
+        <h2 class="group-title">
+            @if ($key === 0)
+                Belum masuk bidang
+                @if ($isSuper)<span class="text-sm muted" style="font-weight:400"> · atur lewat Kelola regu › Ubah Regu › Bidang</span>@endif
+            @else
+                Bidang {{ $group->first()->department->name }}
+                @if ($group->first()->department->division)<span class="text-sm muted" style="font-weight:400"> · Divisi {{ $group->first()->department->division->name }}</span>@endif
+            @endif
+        </h2>
+    @endif
+    <div class="team-grid">
+        @foreach ($group as $team)
+            <a href="{{ route('admin.teams.show', $team) }}" class="team-card {{ $team->is_active ? '' : 'is-off' }}">
+                <div class="team-card-head">
+                    <span class="team-ico" style="background: {{ $team->hex() }}"><x-icon :name="$team->icon" :size="22" /></span>
+                    <div style="min-width:0">
+                        <div class="team-name">Regu {{ $team->name }}</div>
+                        <div class="text-xs muted">Kode laporan {{ $team->code }}@unless ($team->is_active) · <span class="txt-red bold">Nonaktif</span>@endunless</div>
+                    </div>
+                </div>
+                @if ($team->description)<p class="team-desc">{{ $team->description }}</p>@endif
+
+                <dl class="team-stats">
+                    <div><dt>Laporan aktif</dt><dd class="{{ $team->open_reports_count ? 'txt-orange' : '' }}">{{ $team->open_reports_count }}</dd></div>
+                    <div><dt>Total laporan</dt><dd>{{ $team->reports_count }}</dd></div>
+                    <div><dt>Anggota</dt><dd>{{ $team->users_count }}</dd></div>
+                    <div><dt>Kategori</dt><dd>{{ $team->categories_count }}</dd></div>
+                </dl>
+
+                <div class="team-foot">
+                    @if ($team->head)
+                        <span class="text-sm"><span class="muted">Kepala Regu:</span> {{ $team->head->name }}</span>
+                    @else
+                        <span class="note-flag is-orange"><x-icon name="alert" :size="14" /> Belum ada Kepala Regu</span>
+                    @endif
+                    <span class="team-go">{{ $isSuper ? 'Kelola' : 'Buka' }} <x-icon name="chevron-right" :size="15" /></span>
+                </div>
+            </a>
+        @endforeach
+    </div>
+@empty
+    <div class="card"><x-empty icon="users" title="Belum ada regu">{{ $isSuper ? 'Tambahkan regu penerima laporan, mis. IT atau Keamanan.' : 'Anda belum tergabung di regu mana pun. Hubungi Superadmin.' }}</x-empty></div>
+@endforelse
 @endsection
 
 @if (auth()->user()->isSuperadmin())

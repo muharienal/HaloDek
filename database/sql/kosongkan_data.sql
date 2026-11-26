@@ -1,5 +1,5 @@
 -- ============================================================================
--- HaloDek — KOSONGKAN DATA, sisakan 1 Superadmin + 1 Karyawan
+-- HaloDek - KOSONGKAN DATA, sisakan 1 Superadmin + 1 Karyawan
 -- ----------------------------------------------------------------------------
 -- DIHAPUS : semua laporan (+ riwayat, lampiran, notifikasi), pengumuman, log audit,
 --           inventaris (barang), lokasi, dan semua pengguna selain 2 akun di bawah.

@@ -6,7 +6,7 @@
 @php $me = auth()->user(); @endphp
 <div class="detail-head mb-4">
     <div class="detail-nav">
-        <a href="{{ route('admin.reports.index') }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Semua laporan</a>
+        <a href="{{ route('admin.reports.index') }}" class="btn btn-ghost btn-sm"><x-icon name="arrow-left" :size="16" /> Semua Laporan</a>
         <a class="btn btn-ghost btn-sm" href="{{ route('admin.reports.print', $report) }}" target="_blank" title="Cetak laporan"><x-icon name="print" :size="16" /> Cetak</a>
     </div>
     @php
@@ -36,6 +36,10 @@
         @endif
     </div>
 </div>
+
+@if ($report->duplicate_of_id && $report->duplicateOf)
+    <div class="alert alert-info"><x-icon name="swap" :size="18" /><div>Laporan ini digabung ke <a class="strong" href="{{ route('admin.reports.show', $report->duplicateOf) }}">{{ $report->duplicateOf->report_number }}</a> karena masalahnya sama. Penanganan dilanjutkan di sana.</div></div>
+@endif
 
 <div class="grid cols-main-r" style="align-items:start">
     <div style="display:grid;gap:20px;min-width:0">
@@ -109,8 +113,8 @@
                 @if ($canAssign)
                     <h2 style="margin:0;font-size:15.5px">Penugasan</h2>
                     <x-select name="assigned_to_id" label="Penanggung jawab" hint="Kosongkan agar laporan menunggu diambil (staf dapat mengambil sendiri).">
-                        <option value="">— Belum ada —</option>
-                        @foreach ($staff as $s)<option value="{{ $s->id }}" @selected(old('assigned_to_id', $report->assigned_to_id) == $s->id)>{{ $s->name }} — {{ $s->id === $me->id ? 'saya, ' : '' }}{{ config('halodek.roles.'.$s->role) }}</option>@endforeach
+                        <option value="">- Belum ada -</option>
+                        @foreach ($staff as $s)<option value="{{ $s->id }}" @selected(old('assigned_to_id', $report->assigned_to_id) == $s->id)>{{ $s->name }} - {{ $s->id === $me->id ? 'saya, ' : '' }}{{ config('halodek.roles.'.$s->role) }}</option>@endforeach
                     </x-select>
                     <x-select name="priority" label="Prioritas" required>
                         @foreach (config('halodek.priorities') as $k => $p)<option value="{{ $k }}" @selected(old('priority', $report->priority) === $k)>{{ $p['label'] }}</option>@endforeach
@@ -144,7 +148,10 @@
             <div class="card-body" style="display:grid;gap:14px">
                 <div><div class="text-xs muted">Kategori</div><div>{{ $report->categoryDisplayName() }}</div></div>
                 <div><div class="text-xs muted">Diajukan</div><div>{{ $report->created_at->translatedFormat('d M Y, H:i') }}</div></div>
+                {{-- Sudah tampil sebagai pilihan di kartu Penugasan bagi yang bisa menugaskan: tidak diulang. --}}
+                @unless ($report->isOpen() && $me->can('assign', $report))
                 <div><div class="text-xs muted">Penanggung jawab</div><div>@if ($report->assignee)<span class="strong">{{ $report->assignee->name }}</span> <span class="muted">· {{ $report->assignee->roleLabel() }}</span>@else<span class="badge tone-amber plain">Belum ada (menunggu diambil)</span>@endif</div></div>
+                @endunless
                 @if ($report->isOpen() && ! $report->assigned_to_id)
                     @php $deadline = $report->responseDeadline(); @endphp
                     <div><div class="text-xs muted">Batas respons</div><div>{{ $deadline->translatedFormat('d M Y, H:i') }}
@@ -156,7 +163,7 @@
                 @if ($report->status === 'selesai')<div><div class="text-xs muted">Konfirmasi pelapor</div><div>{{ $report->satisfied ? 'Sudah beres' : 'Belum dijawab' }}</div></div>@endif
                 @if ($report->location_name)<div><div class="text-xs muted">Lokasi</div><div>{{ $report->location_name }}</div></div>@endif
                 @if ($report->assetLabel())<div><div class="text-xs muted">Barang terkait</div>
-                    @if ($assetUrl)<a href="{{ $assetUrl }}" target="_blank" rel="noopener" title="Buka di Inventaris">{{ $report->assetLabel() }}</a>@else<div>{{ $report->assetLabel() }}</div>@endif</div>@endif
+                    @if ($assetUrl)<a href="{{ $assetUrl }}" target="_blank" rel="noopener" title="Lihat data barang di Inventaris">{{ $report->assetLabel() }}</a>@else<div>{{ $report->assetLabel() }}</div>@endif</div>@endif
             </div>
         </div>
 
@@ -165,19 +172,24 @@
                 <div class="card-head"><h2>Riwayat Laporan Barang Ini</h2></div>
                 <div class="card-body" style="display:grid;gap:10px">
                     @foreach ($history as $h)
-                        <a href="{{ route('admin.reports.show', $h) }}" style="text-decoration:none;color:inherit"><div class="mono strong">{{ $h->report_number }}</div><div class="text-sm muted truncate">{{ $h->title }} · {{ $h->created_at->translatedFormat('d M Y') }}</div></a>
+                        <a href="{{ route('admin.reports.show', $h) }}" style="text-decoration:none;color:inherit">
+                            <div class="flex items-center justify-between gap-2"><span class="mono strong">{{ $h->report_number }}</span><x-badge :tone="$h->statusTone()">{{ $h->statusLabel() }}</x-badge></div>
+                            <div class="text-sm muted truncate">{{ $h->created_at->translatedFormat('d M Y') }}</div></a>
                     @endforeach
                 </div>
             </div>
         @endif
 
-        @php $canTransfer = $otherTeams->isNotEmpty() && $me->can('assign', $report); @endphp
-        @if ($canTransfer || $me->can('delete', $report))
+        @php $canTransfer = $otherTeams->isNotEmpty() && $me->can('assign', $report); $canMerge = $mergeTargets->isNotEmpty(); @endphp
+        @if ($canTransfer || $canMerge || $me->can('delete', $report))
         <div class="card">
             <div class="card-head"><h2>Tindakan lain</h2></div>
             <div class="card-body" style="display:grid;gap:10px">
                 @if ($canTransfer)
                     <button class="btn btn-secondary" data-modal-open="transfer-modal"><x-icon name="swap" :size="16" /> Alihkan ke Regu Lain</button>
+                @endif
+                @if ($canMerge)
+                    <button class="btn btn-secondary" data-modal-open="merge-modal"><x-icon name="list" :size="16" /> Gabungkan (Laporan Ganda)</button>
                 @endif
                 @can('delete', $report)
                     <form method="POST" action="{{ route('admin.reports.destroy', $report) }}" data-confirm="Hapus laporan {{ $report->report_number }}? Laporan akan disembunyikan dari semua pengguna." data-confirm-title="Hapus laporan">
@@ -223,15 +235,28 @@
             </div>
         @endforeach
     @endif
+    @if ($mergeTargets->isNotEmpty())
+        <x-form-modal id="merge-modal" create-title="Gabungkan Laporan Ganda" :action="route('admin.reports.merge', $report)" submit="Gabungkan">
+            <div style="display:grid;gap:14px">
+                <x-select name="master_id" label="Laporan utama" required>
+                    <option value="">- Pilih laporan yang sama -</option>
+                    @foreach ($mergeTargets as $m)
+                        <option value="{{ $m->id }}" @selected(old('master_id') == $m->id)>{{ $m->report_number }}{{ $m->asset_id && $m->asset_id === $report->asset_id ? ' · barang sama' : '' }} · {{ \Illuminate\Support\Str::limit($m->description, 60) }}</option>
+                    @endforeach
+                </x-select>
+                <p class="hint" style="margin:0">Laporan {{ $report->report_number }} ditutup dan ditautkan ke laporan utama. Pelapor dikabari bahwa masalahnya sudah ditangani di laporan itu.</p>
+            </div>
+        </x-form-modal>
+    @endif
     @if ($otherTeams->isNotEmpty() && auth()->user()->can('assign', $report))
         <x-form-modal id="transfer-modal" create-title="Alihkan Laporan" :action="route('admin.reports.transfer', $report)" submit="Alihkan">
             @php $map = $otherTeams->mapWithKeys(fn ($t) => [$t->id => $t->categories->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values()]); @endphp
             <div style="display:grid;gap:16px">
                 <x-select name="team_id" label="Regu tujuan" required id="tr-team">
-                    <option value="">— Pilih regu —</option>
+                    <option value="">- Pilih regu -</option>
                     @foreach ($otherTeams as $t)<option value="{{ $t->id }}" @selected(old('team_id') == $t->id)>{{ $t->name }}</option>@endforeach
                 </x-select>
-                <x-select name="category_id" label="Kategori di regu tujuan" required id="tr-cat"><option value="">— Pilih regu dahulu —</option></x-select>
+                <x-select name="category_id" label="Kategori di regu tujuan" required id="tr-cat"><option value="">- Pilih regu dahulu -</option></x-select>
                 <x-textarea name="reason" label="Alasan pengalihan" rows="3" maxlength="500" required />
             </div>
         </x-form-modal>
@@ -246,7 +271,7 @@
     if (!team) { return; }
     var oldCat = @json(old('category_id'));
     function fill() {
-        cat.innerHTML = '<option value="">— Pilih kategori —</option>';
+        cat.innerHTML = '<option value="">- Pilih kategori -</option>';
         (map[team.value] || []).forEach(function (c) {
             var o = document.createElement('option'); o.value = c.id; o.textContent = c.name;
             if (String(oldCat) === String(c.id)) { o.selected = true; }

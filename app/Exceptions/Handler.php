@@ -15,6 +15,16 @@ class Handler extends ExceptionHandler
      *
      * @var array<int, string>
      */
+    /**
+     * Bentrok aksi (mis. laporan sudah diambil orang lain) adalah pesan biasa untuk pengguna,
+     * bukan galat sistem: tidak dicatat di log agar "Error terakhir" di Status Sistem tetap bersih.
+     *
+     * @var array<int, class-string<\Throwable>>
+     */
+    protected $dontReport = [
+        ReportConflict::class,
+    ];
+
     protected $dontFlash = [
         'current_password',
         'password',

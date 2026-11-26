@@ -62,11 +62,13 @@
 
             @if ($me->isSuperadmin())
                 <div class="dropdown nav-dd">
-                    <button type="button" class="nav-link {{ $act($on('admin.users.*', 'admin.audit.*', 'admin.status.*')) }}" data-dropdown-toggle aria-expanded="false">
+                    <button type="button" class="nav-link {{ $act($on('admin.users.*', 'admin.org.*', 'admin.audit.*', 'admin.status.*', 'admin.wa.*')) }}" data-dropdown-toggle aria-expanded="false">
                         Administrasi <x-icon name="chevron-down" :size="13" />
                     </button>
                     <div class="dropdown-menu">
                         <a class="dropdown-item {{ $act($on('admin.users.*')) }}" href="{{ route('admin.users.index') }}">Manajemen Pengguna</a>
+                        <a class="dropdown-item {{ $act($on('admin.org.*')) }}" href="{{ route('admin.org.index') }}">Struktur Organisasi</a>
+                        <a class="dropdown-item {{ $act($on('admin.wa.*')) }}" href="{{ route('admin.wa.edit') }}">WhatsApp</a>
                         <a class="dropdown-item {{ $act($on('admin.audit.*')) }}" href="{{ route('admin.audit.index') }}">Log Aktivitas</a>
                         <a class="dropdown-item {{ $act($on('admin.status.*')) }}" href="{{ route('admin.status.index') }}">Status Sistem</a>
                     </div>
@@ -77,6 +79,9 @@
         <div class="topnav-actions">
             <a href="{{ route('employee.reports.create') }}" class="btn btn-cta btn-sm btn-new"><x-icon name="plus" :size="15" /> Ajukan Laporan</a>
 
+            <button type="button" class="app-chip" data-modal-open="pwa-modal" data-pwa-chip title="Pasang HaloDek di HP atau laptop">
+                <x-icon name="download" :size="15" /><span class="app-chip-t">Pasang Aplikasi</span>
+            </button>
             @if ($needsWa ?? false)
                 <button type="button" class="wa-chip" data-modal-open="wa-modal" title="Isi nomor WhatsApp untuk kabar laporan otomatis">
                     <span class="wa-dot"></span><x-icon name="phone" :size="15" /><span class="wa-chip-t">Isi nomor WA</span>
@@ -94,7 +99,7 @@
                         <label class="label" for="q-nav">{{ $listSearch ? 'Cari di daftar ini' : 'Cari laporan' }}</label>
                         @foreach ($carry as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                         <div class="flex gap-2">
-                            <input class="input" id="q-nav" type="search" name="q" maxlength="60" value="{{ $listSearch ? request('q') : '' }}" placeholder="{{ $isAdmin ? 'No. laporan, judul, nama / NIK pelapor' : 'No. laporan atau judul' }}" autocomplete="off" @unless ($listSearch) required minlength="2" @endunless>
+                            <input class="input" id="q-nav" type="search" name="q" maxlength="60" value="{{ $listSearch ? request('q') : '' }}" placeholder="{{ $isAdmin ? 'No. laporan, isi, nama / NIK pelapor' : 'No. laporan atau isi laporan' }}" autocomplete="off" @unless ($listSearch) required minlength="2" @endunless>
                             <button class="btn btn-primary btn-icon" aria-label="Cari"><x-icon name="search" :size="16" /></button>
                         </div>
                     </form>
@@ -108,7 +113,7 @@
                     <div class="flex items-center justify-between" style="padding:12px 14px;border-bottom:1px solid var(--line)">
                         <strong>Notifikasi</strong>
                         @if ($unreadCount > 0)
-                            <form method="POST" action="{{ route('notifications.read-all') }}">@csrf @method('PATCH')<button class="btn btn-ghost btn-sm" data-no-lock>Tandai dibaca</button></form>
+                            <form method="POST" action="{{ route('notifications.read-all') }}">@csrf @method('PATCH')<button class="btn btn-ghost btn-sm" data-no-lock>Tandai Dibaca</button></form>
                         @endif
                     </div>
                     @forelse ($recentNotifications as $n)
@@ -199,6 +204,8 @@
             <a class="tile {{ $act($on('admin.monthly.*')) }}" href="{{ route('admin.monthly.index') }}"><span class="tile-ico tone-teal"><x-icon name="chart" :size="22" /></span>Laporan Bulanan</a>
             @if ($me->isSuperadmin())
                 <a class="tile {{ $act($on('admin.users.*')) }}" href="{{ route('admin.users.index') }}"><span class="tile-ico tone-violet"><x-icon name="user" :size="22" /></span>Pengguna</a>
+                <a class="tile {{ $act($on('admin.org.*')) }}" href="{{ route('admin.org.index') }}"><span class="tile-ico tone-blue"><x-icon name="building" :size="22" /></span>Struktur Organisasi</a>
+                <a class="tile {{ $act($on('admin.wa.*')) }}" href="{{ route('admin.wa.edit') }}"><span class="tile-ico tone-green"><x-icon name="chat" :size="22" /></span>WhatsApp</a>
                 <a class="tile {{ $act($on('admin.audit.*')) }}" href="{{ route('admin.audit.index') }}"><span class="tile-ico tone-gray"><x-icon name="history" :size="22" /></span>Log Aktivitas</a>
                 <a class="tile {{ $act($on('admin.status.*')) }}" href="{{ route('admin.status.index') }}"><span class="tile-ico tone-teal"><x-icon name="server" :size="22" /></span>Status Sistem</a>
             @endif
@@ -209,8 +216,9 @@
 </aside>
 
 @if ($needsWa ?? false)
-    <x-wa-prompt :show="$showWaPrompt ?? false" />
+    <x-wa-prompt :show="$showWaPrompt ?? false" :pwa="$showPwaPrompt ?? false" />
 @endif
+<x-pwa-install :auto="($showPwaPrompt ?? false) && ! ($showWaPrompt ?? false)" />
 
 @stack('modals')
 
